@@ -1,6 +1,8 @@
 ---@class AirtableFilter
 ---@field name string Display name shown in the picker/command completion
----@field formula string Airtable `filterByFormula` expression
+---@field formula string? Airtable `filterByFormula` expression, for complex conditions
+---@field field string? Shorthand alternative to `formula`: Airtable field name to match exactly
+---@field value string? Shorthand alternative to `formula`: value `field` must equal (used with `field`)
 
 ---@class AirtableFields
 ---@field title string Airtable field name used as the record title
@@ -37,7 +39,7 @@ local defaults = {
     { field = 'Name', hl = 'TelescopeResultsIdentifier' },
   },
   filters = {
-    { name = 'Assigned to me', formula = "{Assignee} = 'Your Name'" },
+    { name = 'Assigned to me', field = 'Assignee', value = 'Your Name' },
   },
   default_filter = 'Assigned to me',
   page_size = 100,
@@ -45,6 +47,24 @@ local defaults = {
 
 ---@type AirtableConfig
 M.options = vim.deepcopy(defaults)
+
+---Escapes single quotes for use inside an Airtable formula string literal.
+---@param value string
+---@return string
+local function escape_formula_string(value) return (value:gsub("'", "\\'")) end
+
+---Resolves a filter's `formula`, building it from `field`/`value` when those are used
+---instead of an explicit formula. Returns nil (and notifies) if the filter is malformed.
+---@param filter AirtableFilter
+---@return string?
+local function resolve_formula(filter)
+  if filter.formula then return filter.formula end
+  if filter.field and filter.value then
+    return string.format("{%s} = '%s'", filter.field, escape_formula_string(filter.value))
+  end
+  notify('Config Error', string.format('filter "%s" needs either "formula" or "field"+"value"', filter.name), vim.log.levels.ERROR)
+  return nil
+end
 
 ---Merges user options into the plugin defaults and validates required fields.
 ---@param opts AirtableConfig?
@@ -72,14 +92,21 @@ function M.setup(opts)
   end
 end
 
----Returns the configured filter matching `name`, or the default filter if `name` is nil.
+---Returns the configured filter matching `name` (with `formula` resolved from the
+---`field`/`value` shorthand if used), or the default filter if `name` is nil.
+---Returns nil (and notifies) if no filter matches or the matched filter is malformed.
 ---@param name string?
 ---@return AirtableFilter?
 function M.get_filter(name)
   local target = name or M.options.default_filter
   for _, filter in ipairs(M.options.filters) do
-    if filter.name == target then return filter end
+    if filter.name == target then
+      local formula = resolve_formula(filter)
+      if not formula then return nil end
+      return vim.tbl_extend('force', filter, { formula = formula })
+    end
   end
+  notify('Unknown Filter', string.format('no filter named "%s"', target), vim.log.levels.ERROR)
   return nil
 end
 

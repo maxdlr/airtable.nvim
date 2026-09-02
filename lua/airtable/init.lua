@@ -18,7 +18,8 @@ end
 function M.open(filter_name)
   local filter = config.get_filter(filter_name)
   if not filter then
-    notify('Unknown Filter', string.format('no filter named "%s"', filter_name or config.options.default_filter), vim.log.levels.ERROR)
+    -- config.get_filter already notified the specific reason (unknown name vs.
+    -- malformed filter) via config.lua's own error path.
     return
   end
 

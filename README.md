@@ -50,7 +50,7 @@ require('airtable').setup({
     { field = 'Assignee', hl = 'Comment' },
   },
   filters = {
-    { name = 'Assigned to me', formula = "{Assignee} = 'Your Name'" },
+    { name = 'Assigned to me', field = 'Assignee', value = 'Your Name' },
     { name = 'Open bugs', formula = "AND({Status} != 'Done', {Type} = 'Bug')" },
   },
   default_filter = 'Assigned to me',
@@ -58,8 +58,12 @@ require('airtable').setup({
 ```
 
 Filters are plain Lua table entries — add, edit, or remove them directly in your config.
-Each filter needs a `name` (shown in the picker/command) and a `formula`
-([Airtable formula syntax](https://support.airtable.com/docs/formula-field-reference)).
+Each filter needs a `name` (shown in the picker/command) plus either:
+- `field` + `value` — shorthand for the common case of matching one field against one
+  value exactly (`{name = 'Assigned to me', field = 'Assignee', value = 'Maxime'}` becomes
+  the formula `{Assignee} = 'Maxime'`), or
+- `formula` — a raw [Airtable formula](https://support.airtable.com/docs/formula-field-reference)
+  for anything more complex (multiple conditions, `!=`, `AND`/`OR`, etc.)
 
 Every field name (`fields.title`, `fields.description`, `display[].field`, and any field
 referenced in a filter's `formula`) must match your Airtable base's actual field names exactly
