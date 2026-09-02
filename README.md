@@ -52,7 +52,7 @@ require('airtable').setup({
     {
       name = 'Assigned to me',
       filters = {
-        { field = 'Assignee', value = 'Your Name', contains = true },
+        { field = 'Assignee', value = 'Your Name' },
       },
       sort = { field = 'Priority', order = 'asc' },
       result_line = {
@@ -65,7 +65,7 @@ require('airtable').setup({
       filters = {
         { field = 'Assignee', value = 'Your Name' },
         { field = 'Status', value = { 'To do', 'In progress' } }, -- OR: any of these
-        { field = 'Type', value = 'Bug' },
+        { field = 'Type', value = 'Bug', only = true }, -- exact match: avoid matching 'Bugfix'
       },
       result_line = {
         { field = 'Name' },
@@ -87,13 +87,15 @@ Each entry is a named view:
   or `require('airtable').open('<name>')`.
 - `filters` *(optional)* — a list of conditions, combined with **AND**. Omit entirely to list
   all records. Each condition is `{ field = '<Airtable field name>', value = ... }`:
-  - `value` as a plain string/number — exact match (`{field} = 'value'`).
+  - `value` as a plain string/number — by default, matches if `field` **contains** this
+    value (`FIND(value, ARRAYJOIN(field)) > 0`). This works for both array-shaped fields
+    (linked records, multi-select, collaborators like a typical `Assignee`) and plain
+    text/single-select fields.
   - `value` as a list of strings — matches **any** of them, i.e. OR within that field
     (`{ field = 'Status', value = { 'To do', 'In progress' } }`).
-  - `contains = true` — for fields that hold **multiple values** under the hood (linked
-    records, multi-select, collaborator fields like a typical `Assignee`), where exact `=`
-    can't match. Builds `FIND(value, ARRAYJOIN(field)) > 0` instead
-    (`{ field = 'Assignee', value = 'Your Name', contains = true }`).
+  - `only = true` — forces an exact `field = value` comparison instead of the default
+    contains-style match. Use this when `value` could be a substring of another value in
+    the same field (e.g. matching `'Bug'` when `'Bugfix'` also exists as a value).
 - `sort` *(optional)* — `{ field = '<Airtable field name>', order = 'asc'|'desc' }`. Maps
   directly to Airtable's `sort[]` API parameter.
 - `result_line` *(required)* — ordered list of `{ field, hl }` sections shown left to right

@@ -1,9 +1,11 @@
 ---@class AirtableFilterCondition
 ---@field field string Airtable field name to match
 ---@field value string|string[] Value `field` must equal/contain. A list means "any of these" (OR).
----@field contains boolean? Set true for array-shaped fields (linked records, multi-select,
----  collaborators) where `field` holds multiple values under the hood and exact `=` can't
----  match — uses `FIND(value, ARRAYJOIN(field)) > 0` instead of `field = value`.
+---@field only boolean? By default, conditions match array-shaped fields too (linked records,
+---  multi-select, collaborators) using `FIND(value, ARRAYJOIN(field)) > 0`, since that also
+---  works correctly for plain text/number/single-select fields. Set `only = true` to force
+---  an exact `field = value` comparison instead — needed if `value` could be a substring of
+---  another value in the same field (e.g. matching 'Bug' when 'Bug report' also exists).
 
 ---@class AirtableSort
 ---@field field string Airtable field name to sort by
@@ -54,7 +56,7 @@ local defaults = {
   pickers = {
     {
       name = 'Assigned to me',
-      filters = { { field = 'Assignee', value = 'Your Name', contains = true } },
+      filters = { { field = 'Assignee', value = 'Your Name' } },
       result_line = { { field = 'Name' } },
     },
   },
@@ -70,16 +72,18 @@ M.options = vim.deepcopy(defaults)
 ---@return string
 local function escape_formula_string(value) return (value:gsub("'", "\\'")) end
 
----Builds a single `field OP value` comparison, using exact `=` match or, for
----array-shaped fields (`contains = true`), `FIND(value, ARRAYJOIN(field)) > 0`.
+---Builds a single `field OP value` comparison. By default uses `FIND(value,
+---ARRAYJOIN(field)) > 0`, which works for both array-shaped fields (linked records,
+---multi-select, collaborators) and plain text/number/single-select fields. Pass
+---`only = true` for an exact `field = value` comparison instead.
 ---@param field string
 ---@param value string
----@param contains boolean?
+---@param only boolean?
 ---@return string
-local function single_match_formula(field, value, contains)
+local function single_match_formula(field, value, only)
   local escaped = escape_formula_string(tostring(value))
-  if contains then return string.format("FIND('%s', ARRAYJOIN({%s})) > 0", escaped, field) end
-  return string.format("{%s} = '%s'", field, escaped)
+  if only then return string.format("{%s} = '%s'", field, escaped) end
+  return string.format("FIND('%s', ARRAYJOIN({%s})) > 0", escaped, field)
 end
 
 ---Builds the formula fragment for one condition. A list `value` becomes an `OR` of
@@ -89,10 +93,10 @@ end
 local function condition_formula(condition)
   if type(condition.value) == 'table' then
     local alternatives =
-      vim.tbl_map(function(v) return single_match_formula(condition.field, v, condition.contains) end, condition.value)
+      vim.tbl_map(function(v) return single_match_formula(condition.field, v, condition.only) end, condition.value)
     return string.format('OR(%s)', table.concat(alternatives, ', '))
   end
-  return single_match_formula(condition.field, condition.value, condition.contains)
+  return single_match_formula(condition.field, condition.value, condition.only)
 end
 
 ---Builds a picker's full `filterByFormula` expression by AND-ing all its conditions.
