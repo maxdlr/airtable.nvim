@@ -38,24 +38,30 @@ function M.format_field(value)
   return tostring(value)
 end
 
----Builds the request URL for listing records, including the filter formula and pagination offset.
----@param formula string
+---Builds the request URL for listing records, including the optional filter formula,
+---optional sort, and pagination offset.
+---@param formula string?
+---@param sort AirtableSort?
 ---@param offset string?
 ---@return string
-local function build_url(formula, offset)
+local function build_url(formula, sort, offset)
   local opts = config.options
-  local params = {
-    'filterByFormula=' .. vim.uri_encode(formula),
-    'pageSize=' .. tostring(opts.page_size),
-  }
+  local params = { 'pageSize=' .. tostring(opts.page_size) }
+  if formula then table.insert(params, 'filterByFormula=' .. vim.uri_encode(formula)) end
+  if sort then
+    table.insert(params, 'sort[0][field]=' .. vim.uri_encode(sort.field))
+    table.insert(params, 'sort[0][direction]=' .. vim.uri_encode(sort.order or 'asc'))
+  end
   if offset then table.insert(params, 'offset=' .. vim.uri_encode(offset)) end
   return string.format('%s/%s/%s?%s', API_URL, opts.base_id, vim.uri_encode(opts.table_name), table.concat(params, '&'))
 end
 
----Fetches every page of records matching `formula` from Airtable.
----@param formula string
+---Fetches every page of records matching `formula` (optional) from Airtable, ordered by
+---`sort` (optional).
+---@param formula string?
+---@param sort AirtableSort?
 ---@param callback fun(records: AirtableRecord[]?, err: AirtableError?)
-function M.list_records(formula, callback)
+function M.list_records(formula, sort, callback)
   local token = config.token()
   if not token then
     callback(nil, { category = 'Missing Token', message = 'no Airtable personal access token configured' })
@@ -67,7 +73,7 @@ function M.list_records(formula, callback)
 
   ---@param offset string?
   local function fetch_page(offset)
-    curl.get(build_url(formula, offset), {
+    curl.get(build_url(formula, sort, offset), {
       headers = { Authorization = 'Bearer ' .. token },
       callback = vim.schedule_wrap(function(response)
         if response.status ~= 200 then

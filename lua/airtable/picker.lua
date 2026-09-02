@@ -1,4 +1,3 @@
-local config = require 'airtable.config'
 local view = require 'airtable.view'
 local format_field = require('airtable.api').format_field
 
@@ -6,13 +5,14 @@ local M = {}
 
 local entry_display = require 'telescope.pickers.entry_display'
 
----Builds the plain-text ordinal string (used for fuzzy matching) from all configured
----display sections, so search isn't limited to just the title.
+---Builds the plain-text ordinal string (used for fuzzy matching) from all `result_line`
+---sections, so search isn't limited to just the first section.
 ---@param record AirtableRecord
+---@param result_line AirtableResultSection[]
 ---@return string
-local function ordinal_text(record)
+local function ordinal_text(record, result_line)
   local parts = {}
-  for _, section in ipairs(config.options.display) do
+  for _, section in ipairs(result_line) do
     local text = format_field(record.fields[section.field])
     if text ~= '' then table.insert(parts, text) end
   end
@@ -20,13 +20,14 @@ local function ordinal_text(record)
 end
 
 ---Builds the segmented `display` function for a record entry, one section per
----configured display field, separated by " │ ". Missing fields are skipped.
+---`result_line` entry, separated by " │ ". Missing fields render as "—".
 ---All sections but the last auto-size to their content; the last fills remaining width.
 ---@param record AirtableRecord
+---@param result_line AirtableResultSection[]
 ---@return function
-local function make_display(record)
+local function make_display(record, result_line)
   local sections = {}
-  for _, section in ipairs(config.options.display) do
+  for _, section in ipairs(result_line) do
     local text = format_field(record.fields[section.field])
     if text == '' then text = '—' end
     table.insert(sections, { text, section.hl or 'Comment' })
@@ -48,7 +49,8 @@ end
 ---Opens a Telescope picker listing `records`; selecting an entry opens the record view buffer.
 ---@param records AirtableRecord[]
 ---@param prompt_title string
-function M.pick(records, prompt_title)
+---@param result_line AirtableResultSection[] Sections to render per result line
+function M.pick(records, prompt_title, result_line)
   local pickers = require 'telescope.pickers'
   local finders = require 'telescope.finders'
   local conf = require('telescope.config').values
@@ -63,8 +65,8 @@ function M.pick(records, prompt_title)
         entry_maker = function(record)
           return {
             value = record,
-            display = make_display(record),
-            ordinal = ordinal_text(record),
+            display = make_display(record, result_line),
+            ordinal = ordinal_text(record, result_line),
           }
         end,
       },

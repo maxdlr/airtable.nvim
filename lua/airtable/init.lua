@@ -9,30 +9,30 @@ function M.setup(opts)
 end
 
 ---@return string[]
-function M.filter_names()
-  return config.filter_names()
+function M.picker_names()
+  return config.picker_names()
 end
 
----Opens the Telescope picker for the given filter name (or the configured default).
----@param filter_name string?
-function M.open(filter_name)
-  local filter = config.get_filter(filter_name)
-  if not filter then
-    -- config.get_filter already notified the specific reason (unknown name vs.
+---Opens the Telescope picker for the given picker name (or the configured default).
+---@param picker_name string?
+function M.open(picker_name)
+  local picker = config.get_picker(picker_name)
+  if not picker then
+    -- config.get_picker already notified the specific reason (unknown name vs.
     -- malformed filter) via config.lua's own error path.
     return
   end
 
-  require('airtable.api').list_records(filter.formula, function(records, err)
+  require('airtable.api').list_records(picker.formula, picker.sort, function(records, err)
     if err then
       notify(err.category, err.message, vim.log.levels.ERROR)
       return
     end
     if #records == 0 then
-      notify('No Records', string.format('no records for filter "%s"', filter.name), vim.log.levels.INFO)
+      notify('No Records', string.format('no records for picker "%s"', picker.name), vim.log.levels.INFO)
       return
     end
-    require('airtable.picker').pick(records, filter.name)
+    require('airtable.picker').pick(records, picker.name, picker.result_line)
   end)
 end
 
