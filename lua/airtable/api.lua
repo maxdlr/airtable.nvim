@@ -9,6 +9,10 @@ local API_URL = 'https://api.airtable.com/v0'
 ---@field createdTime string
 ---@field fields table<string, any>
 
+---@class AirtableError
+---@field category string Short category shown in the toast title, e.g. "API Error"
+---@field message string
+
 ---Builds the request URL for listing records, including the filter formula and pagination offset.
 ---@param formula string
 ---@param offset string?
@@ -25,11 +29,11 @@ end
 
 ---Fetches every page of records matching `formula` from Airtable.
 ---@param formula string
----@param callback fun(records: AirtableRecord[]?, err: string?)
+---@param callback fun(records: AirtableRecord[]?, err: AirtableError?)
 function M.list_records(formula, callback)
   local token = config.token()
   if not token then
-    callback(nil, 'missing Airtable personal access token')
+    callback(nil, { category = 'Missing Token', message = 'no Airtable personal access token configured' })
     return
   end
 
@@ -42,13 +46,16 @@ function M.list_records(formula, callback)
       headers = { Authorization = 'Bearer ' .. token },
       callback = vim.schedule_wrap(function(response)
         if response.status ~= 200 then
-          callback(nil, string.format('Airtable API error (%d): %s', response.status, response.body or ''))
+          callback(nil, {
+            category = string.format('API Error (%d)', response.status),
+            message = response.body or 'no response body',
+          })
           return
         end
 
         local ok, decoded = pcall(vim.json.decode, response.body)
         if not ok then
-          callback(nil, 'failed to decode Airtable response')
+          callback(nil, { category = 'Response Error', message = 'failed to decode Airtable response' })
           return
         end
 

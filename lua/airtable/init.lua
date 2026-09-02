@@ -1,4 +1,5 @@
 local config = require 'airtable.config'
+local notify = require('airtable.notify').notify
 
 local M = {}
 
@@ -17,20 +18,17 @@ end
 function M.open(filter_name)
   local filter = config.get_filter(filter_name)
   if not filter then
-    vim.notify(
-      string.format('[airtable.nvim] unknown filter "%s"', filter_name or config.options.default_filter),
-      vim.log.levels.ERROR
-    )
+    notify('Unknown Filter', string.format('no filter named "%s"', filter_name or config.options.default_filter), vim.log.levels.ERROR)
     return
   end
 
   require('airtable.api').list_records(filter.formula, function(records, err)
     if err then
-      vim.notify('[airtable.nvim] ' .. err, vim.log.levels.ERROR)
+      notify(err.category, err.message, vim.log.levels.ERROR)
       return
     end
     if #records == 0 then
-      vim.notify(string.format('[airtable.nvim] no records for filter "%s"', filter.name), vim.log.levels.INFO)
+      notify('No Records', string.format('no records for filter "%s"', filter.name), vim.log.levels.INFO)
       return
     end
     require('airtable.picker').pick(records, filter.name)

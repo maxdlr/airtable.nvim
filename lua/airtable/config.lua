@@ -17,6 +17,8 @@
 
 local M = {}
 
+local notify = require('airtable.notify').notify
+
 ---@type AirtableConfig
 local defaults = {
   token_env = 'AIRTABLE_TOKEN',
@@ -42,13 +44,13 @@ function M.setup(opts)
   M.options = vim.tbl_deep_extend('force', vim.deepcopy(defaults), opts or {})
 
   if M.options.base_id == '' then
-    vim.notify('[airtable.nvim] "base_id" is not set', vim.log.levels.ERROR)
+    notify('Config Error', '"base_id" is not set', vim.log.levels.ERROR)
   end
   if M.options.table_name == '' then
-    vim.notify('[airtable.nvim] "table_name" is not set', vim.log.levels.ERROR)
+    notify('Config Error', '"table_name" is not set', vim.log.levels.ERROR)
   end
   if #M.options.filters == 0 then
-    vim.notify('[airtable.nvim] no filters configured', vim.log.levels.WARN)
+    notify('Config Warning', 'no filters configured', vim.log.levels.WARN)
   end
 end
 
@@ -73,10 +75,7 @@ end
 function M.token()
   local value = os.getenv(M.options.token_env)
   if not value or value == '' then
-    vim.notify(
-      string.format('[airtable.nvim] environment variable "%s" is not set', M.options.token_env),
-      vim.log.levels.ERROR
-    )
+    notify('Missing Token', string.format('environment variable "%s" is not set', M.options.token_env), vim.log.levels.ERROR)
     return nil
   end
   return value
