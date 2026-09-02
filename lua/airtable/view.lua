@@ -1,4 +1,5 @@
 local config = require 'airtable.config'
+local format_field = require('airtable.api').format_field
 
 local M = {}
 
@@ -7,8 +8,10 @@ local M = {}
 ---@return string[]
 local function render_lines(record)
   local fields = config.options.fields
-  local title = record.fields[fields.title] or '(untitled)'
-  local description = record.fields[fields.description] or '_No description._'
+  local title = format_field(record.fields[fields.title])
+  local description = format_field(record.fields[fields.description])
+  if title == '' then title = '(untitled)' end
+  if description == '' then description = '_No description._' end
 
   local lines = { '# ' .. title, '' }
   vim.list_extend(lines, vim.split(description, '\n', { plain = true }))

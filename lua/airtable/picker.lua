@@ -1,5 +1,6 @@
 local config = require 'airtable.config'
 local view = require 'airtable.view'
+local format_field = require('airtable.api').format_field
 
 local M = {}
 
@@ -12,8 +13,8 @@ local entry_display = require 'telescope.pickers.entry_display'
 local function ordinal_text(record)
   local parts = {}
   for _, section in ipairs(config.options.display) do
-    local value = record.fields[section.field]
-    if value ~= nil and value ~= '' then table.insert(parts, tostring(value)) end
+    local text = format_field(record.fields[section.field])
+    if text ~= '' then table.insert(parts, text) end
   end
   return table.concat(parts, ' ')
 end
@@ -26,9 +27,9 @@ end
 local function make_display(record)
   local sections = {}
   for _, section in ipairs(config.options.display) do
-    local value = record.fields[section.field]
-    if value == nil or value == '' then value = '—' end
-    table.insert(sections, { tostring(value), section.hl or 'Comment' })
+    local text = format_field(record.fields[section.field])
+    if text == '' then text = '—' end
+    table.insert(sections, { text, section.hl or 'Comment' })
   end
 
   local items = {}

@@ -65,6 +65,19 @@ Each filter needs a `name` (shown in the picker/command) plus either:
 - `formula` — a raw [Airtable formula](https://support.airtable.com/docs/formula-field-reference)
   for anything more complex (multiple conditions, `!=`, `AND`/`OR`, etc.)
 
+The `field`/`value` shorthand only works for fields that are plain text/number/single-select
+in Airtable. Fields that hold **multiple values** — linked records, multi-select, or
+collaborator fields like a typical `Assignee` — are arrays under the hood, and `=` cannot
+match against them. For those, use `formula` with `FIND`/`ARRAYJOIN` instead:
+
+```lua
+-- ❌ won't match: Assignee is a collaborator field (array), not plain text
+{ name = 'Assigned to me', field = 'Assignee', value = 'Maxime' }
+
+-- ✅ works for array-shaped fields
+{ name = 'Assigned to me', formula = "FIND('Maxime', ARRAYJOIN({Assignee})) > 0" }
+```
+
 Every field name (`fields.title`, `fields.description`, `display[].field`, and any field
 referenced in a filter's `formula`) must match your Airtable base's actual field names exactly
 (case-sensitive) — these vary by team/base, so there is no universal default that works

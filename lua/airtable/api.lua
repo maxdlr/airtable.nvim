@@ -13,6 +13,31 @@ local API_URL = 'https://api.airtable.com/v0'
 ---@field category string Short category shown in the toast title, e.g. "API Error"
 ---@field message string
 
+---Formats a raw Airtable field value for display as plain text. Airtable represents
+---some field types beyond plain strings/numbers:
+---  - linked records / multi-select: array of strings or record ids
+---  - collaborators: array of `{ id, email, name }` objects (or a single one)
+---Both are flattened to a comma-separated string of their readable parts.
+---@param value any
+---@return string
+function M.format_field(value)
+  if value == nil then return '' end
+  if type(value) == 'string' or type(value) == 'number' then return tostring(value) end
+  if type(value) == 'table' then
+    if value.name then return tostring(value.name) end -- single collaborator object
+    local parts = {}
+    for _, item in ipairs(value) do
+      if type(item) == 'table' then
+        table.insert(parts, tostring(item.name or item.id or vim.inspect(item)))
+      else
+        table.insert(parts, tostring(item))
+      end
+    end
+    return table.concat(parts, ', ')
+  end
+  return tostring(value)
+end
+
 ---Builds the request URL for listing records, including the filter formula and pagination offset.
 ---@param formula string
 ---@param offset string?
