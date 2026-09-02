@@ -1,5 +1,4 @@
 local config = require("airtable.config")
-local notify = require("airtable.notify").notify
 
 local M = {}
 
@@ -161,7 +160,7 @@ local function build_record_path(record_id)
 	)
 end
 
----gets record by id from Airtable, ordered by
+---Fetches a single record by id from Airtable.
 ---@param record_id string
 ---@param callback fun(record: AirtableRecord?, err: AirtableError?)
 function M.get_recordById(record_id, callback)
@@ -172,39 +171,32 @@ function M.get_recordById(record_id, callback)
 	end
 
 	local curl = require("plenary.curl")
-	local record = {}
 	local path = build_record_path(record_id)
 
-	local function fetch_record()
-		curl.get(path, {
-			headers = { Authorization = "Bearer " .. token },
+	curl.get(path, {
+		headers = { Authorization = "Bearer " .. token },
+		-- Disable curl's URL globbing ("-g"), same reasoning as in `list_records`.
+		raw = { "-g" },
+		callback = vim.schedule_wrap(function(response)
+			if response.status ~= 200 then
+				callback(nil, {
+					category = string.format("API Error (%d)", response.status),
+					message = response.body or "no response body",
+				})
+				return
+			end
 
-			raw = { "-g" },
+			-- Airtable's "get record" endpoint returns the record object directly
+			-- (`{ id, createdTime, fields }`), unlike `list_records`'s `{ records: [...] }`.
+			local ok, decoded = pcall(vim.json.decode, response.body)
+			if not ok then
+				callback(nil, { category = "Response Error", message = "failed to decode Airtable response" })
+				return
+			end
 
-			callback = vim.schedule_wrap(function(response)
-				if response.status ~= 200 then
-					callback(nil, {
-						category = string.format("API Error (%d)", response.status),
-						message = response.body or "no response body",
-					})
-					return
-				end
-
-				local ok, decoded = pcall(vim.json.decode, response.body)
-				notify("Response", response.body, vim.log.levels.DEBUG)
-				if not ok then
-					callback(nil, { category = "Response Error", message = "failed to decode Airtable response" })
-					return
-				end
-
-				vim.list_extend(record, decoded or {})
-
-				callback(record, nil)
-			end),
-		})
-	end
-
-	fetch_record()
+			callback(decoded, nil)
+		end),
+	})
 end
 
 return M

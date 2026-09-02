@@ -46,14 +46,15 @@ local function render_lines(record)
 end
 
 ---Opens a non-writable scratch buffer showing the record formatted as markdown.
+---@param record_id string
 function M.open(record_id)
 	api.get_recordById(record_id, function(record, err)
 		if err then
 			notify(err.category, err.message, vim.log.levels.ERROR)
 			return
 		end
-		if #record == 0 then
-			notify("No Record", string.format('no records for id "%s"', record_id), vim.log.levels.INFO)
+		if not record then
+			notify("No Record", string.format('no record found for id "%s"', record_id), vim.log.levels.INFO)
 			return
 		end
 
