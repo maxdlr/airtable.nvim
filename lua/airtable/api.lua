@@ -97,6 +97,10 @@ function M.list_records(formula, sort, callback)
     curl.get(path, {
       query = build_query(formula, sort, offset),
       headers = { Authorization = 'Bearer ' .. token },
+      -- Disable curl's URL globbing ("-g"): without it, curl interprets literal
+      -- "[" / "]" in `sort[0][field]`-style query keys as its own range/glob syntax
+      -- and fails with "bad range in URL" instead of sending the request.
+      raw = { '-g' },
       callback = vim.schedule_wrap(function(response)
         if response.status ~= 200 then
           callback(nil, {
