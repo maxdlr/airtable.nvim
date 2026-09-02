@@ -5,17 +5,28 @@ local M = {}
 
 local entry_display = require 'telescope.pickers.entry_display'
 
+---Default highlight groups by section position, used when a `result_line` entry omits
+---`hl`: 1st section stands out as the identifier, 2nd as a secondary comment, everything
+---after that as a plain comment.
+local DEFAULT_HL_BY_POSITION = {
+  'TelescopeResultsIdentifier',
+  'TelescopeResultsSpecialComment',
+}
+local DEFAULT_HL_FALLBACK = 'TelescopeResultsComment'
+
 ---Cache of hex color -> generated highlight group name, so repeated colors (or repeated
 ---picker invocations) don't keep redefining the same highlight group.
 local hex_hl_cache = {}
 
 ---Resolves a `result_line` section's `hl` to a highlight group name. Accepts either an
 ---existing highlight group name (used as-is) or a hex color like "#FFFFFF" (a highlight
----group is lazily created and cached for it).
+---group is lazily created and cached for it). When `hl` is omitted, falls back to a
+---sensible default based on the section's position (see `DEFAULT_HL_BY_POSITION`).
 ---@param hl string?
+---@param position integer 1-based index of this section within its result_line
 ---@return string
-local function resolve_hl(hl)
-  if not hl then return 'Comment' end
+local function resolve_hl(hl, position)
+  if not hl then return DEFAULT_HL_BY_POSITION[position] or DEFAULT_HL_FALLBACK end
   if not hl:match '^#%x%x%x%x%x%x$' then return hl end
 
   local cached = hex_hl_cache[hl]
@@ -49,10 +60,10 @@ end
 ---@return function
 local function make_display(record, result_line)
   local sections = {}
-  for _, section in ipairs(result_line) do
+  for i, section in ipairs(result_line) do
     local text = format_field(record.fields[section.field])
     if text == '' then text = '—' end
-    table.insert(sections, { text, resolve_hl(section.hl) })
+    table.insert(sections, { text, resolve_hl(section.hl, i) })
   end
 
   local items = {}

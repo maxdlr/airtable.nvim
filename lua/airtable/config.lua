@@ -11,8 +11,10 @@
 
 ---@class AirtableResultSection
 ---@field field string Airtable field name to render in this section
----@field hl string? Highlight group name, or a hex color like "#FFFFFF" (default: a neutral
----  comment color). A hex color gets its own highlight group created automatically.
+---@field hl string? Highlight group name, or a hex color like "#FFFFFF" (a highlight group
+---  is created automatically for hex colors). If omitted, defaults by position: 1st section
+---  -> "TelescopeResultsIdentifier", 2nd -> "TelescopeResultsSpecialComment", others ->
+---  "TelescopeResultsComment".
 
 ---@class AirtablePicker
 ---@field name string Display name shown in the picker/command completion
@@ -53,7 +55,7 @@ local defaults = {
     {
       name = 'Assigned to me',
       filters = { { field = 'Assignee', value = 'Your Name', contains = true } },
-      result_line = { { field = 'Name', hl = 'TelescopeResultsIdentifier' } },
+      result_line = { { field = 'Name' } },
     },
   },
   default_filter = 'Assigned to me',

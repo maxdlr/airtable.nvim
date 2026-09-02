@@ -56,8 +56,8 @@ require('airtable').setup({
       },
       sort = { field = 'Priority', order = 'asc' },
       result_line = {
-        { field = 'Name', hl = 'TelescopeResultsIdentifier' },
-        { field = 'Status', hl = 'Comment' },
+        { field = 'Name' }, -- hl defaults to TelescopeResultsIdentifier (1st section)
+        { field = 'Status' }, -- hl defaults to TelescopeResultsSpecialComment (2nd section)
       },
     },
     {
@@ -68,8 +68,9 @@ require('airtable').setup({
         { field = 'Type', value = 'Bug' },
       },
       result_line = {
-        { field = 'Name', hl = 'TelescopeResultsIdentifier' },
-        { field = 'Status', hl = 'Comment' },
+        { field = 'Name' },
+        { field = 'Status' },
+        { field = 'Priority', hl = '#FFA500' }, -- 3rd+ section: override with a hex color
       },
     },
   },
@@ -97,9 +98,10 @@ Each entry is a named view:
   directly to Airtable's `sort[]` API parameter.
 - `result_line` *(required)* — ordered list of `{ field, hl }` sections shown left to right
   in the picker, separated by " │ ". A record missing a given field shows "—" instead of
-  breaking the layout. `hl` accepts either a highlight group name (e.g.
-  `'TelescopeResultsIdentifier'`) or a hex color (e.g. `'#FFFFFF'`) — a highlight group is
-  created automatically for hex colors.
+  breaking the layout. `hl` is optional and accepts either a highlight group name or a hex
+  color (e.g. `'#FFFFFF'`, auto-creates its own highlight group). When omitted, it defaults
+  by position: 1st section -> `TelescopeResultsIdentifier`, 2nd -> `TelescopeResultsSpecialComment`,
+  every section after that -> `TelescopeResultsComment`.
 
 Every field name referenced anywhere (`buffer.fields`, `pickers[].filters[].field`,
 `pickers[].sort.field`, `pickers[].result_line[].field`) must match your Airtable base's
