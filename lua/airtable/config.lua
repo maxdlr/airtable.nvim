@@ -11,7 +11,8 @@
 
 ---@class AirtableResultSection
 ---@field field string Airtable field name to render in this section
----@field hl string? Highlight group for this section's text (default: a neutral comment color)
+---@field hl string? Highlight group name, or a hex color like "#FFFFFF" (default: a neutral
+---  comment color). A hex color gets its own highlight group created automatically.
 
 ---@class AirtablePicker
 ---@field name string Display name shown in the picker/command completion

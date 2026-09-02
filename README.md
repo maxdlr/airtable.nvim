@@ -97,7 +97,9 @@ Each entry is a named view:
   directly to Airtable's `sort[]` API parameter.
 - `result_line` *(required)* — ordered list of `{ field, hl }` sections shown left to right
   in the picker, separated by " │ ". A record missing a given field shows "—" instead of
-  breaking the layout.
+  breaking the layout. `hl` accepts either a highlight group name (e.g.
+  `'TelescopeResultsIdentifier'`) or a hex color (e.g. `'#FFFFFF'`) — a highlight group is
+  created automatically for hex colors.
 
 Every field name referenced anywhere (`buffer.fields`, `pickers[].filters[].field`,
 `pickers[].sort.field`, `pickers[].result_line[].field`) must match your Airtable base's

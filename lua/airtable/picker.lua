@@ -5,6 +5,28 @@ local M = {}
 
 local entry_display = require 'telescope.pickers.entry_display'
 
+---Cache of hex color -> generated highlight group name, so repeated colors (or repeated
+---picker invocations) don't keep redefining the same highlight group.
+local hex_hl_cache = {}
+
+---Resolves a `result_line` section's `hl` to a highlight group name. Accepts either an
+---existing highlight group name (used as-is) or a hex color like "#FFFFFF" (a highlight
+---group is lazily created and cached for it).
+---@param hl string?
+---@return string
+local function resolve_hl(hl)
+  if not hl then return 'Comment' end
+  if not hl:match '^#%x%x%x%x%x%x$' then return hl end
+
+  local cached = hex_hl_cache[hl]
+  if cached then return cached end
+
+  local group = 'AirtableColor' .. hl:sub(2)
+  vim.api.nvim_set_hl(0, group, { fg = hl })
+  hex_hl_cache[hl] = group
+  return group
+end
+
 ---Builds the plain-text ordinal string (used for fuzzy matching) from all `result_line`
 ---sections, so search isn't limited to just the first section.
 ---@param record AirtableRecord
@@ -30,7 +52,7 @@ local function make_display(record, result_line)
   for _, section in ipairs(result_line) do
     local text = format_field(record.fields[section.field])
     if text == '' then text = '—' end
-    table.insert(sections, { text, section.hl or 'Comment' })
+    table.insert(sections, { text, resolve_hl(section.hl) })
   end
 
   local items = {}
