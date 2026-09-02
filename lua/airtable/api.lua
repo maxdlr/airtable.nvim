@@ -1,4 +1,5 @@
 local config = require("airtable.config")
+local notify = require("airtable.notify").notify
 
 local M = {}
 
@@ -190,12 +191,13 @@ function M.get_recordById(record_id, callback)
 				end
 
 				local ok, decoded = pcall(vim.json.decode, response.body)
+				notify("Response", response.body, vim.log.levels.DEBUG)
 				if not ok then
 					callback(nil, { category = "Response Error", message = "failed to decode Airtable response" })
 					return
 				end
 
-				vim.list_extend(record, decoded.records or {})
+				vim.list_extend(record, decoded or {})
 
 				callback(record, nil)
 			end),
