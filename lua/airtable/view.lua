@@ -1,4 +1,5 @@
 local config = require("airtable.config")
+local notify = require("airtable.notify").notify
 local api = require("airtable.api")
 local format_field = api.format_field
 
@@ -46,19 +47,29 @@ end
 
 ---Opens a non-writable scratch buffer showing the record formatted as markdown.
 function M.open(record_id)
-	local record = api.get__record(record_id)
-	local buf = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_buf_set_lines(buf, 0, -1, false, render_lines(record))
+	api.get_recordById(record_id, function(record, err)
+		if err then
+			notify(err.category, err.message, vim.log.levels.ERROR)
+			return
+		end
+		if #record == 0 then
+			notify("No Record", string.format('no records for id "%s"', record_id), vim.log.levels.INFO)
+			return
+		end
 
-	vim.bo[buf].filetype = "markdown"
-	vim.bo[buf].modifiable = false
-	vim.bo[buf].readonly = true
-	vim.bo[buf].buftype = "nofile"
-	vim.bo[buf].bufhidden = "wipe"
-	vim.bo[buf].swapfile = false
-	vim.api.nvim_buf_set_name(buf, "airtable://" .. record.id)
+		local buf = vim.api.nvim_create_buf(false, true)
+		vim.api.nvim_buf_set_lines(buf, 0, -1, false, render_lines(record))
 
-	vim.api.nvim_set_current_buf(buf)
+		vim.bo[buf].filetype = "markdown"
+		vim.bo[buf].modifiable = false
+		vim.bo[buf].readonly = true
+		vim.bo[buf].buftype = "nofile"
+		vim.bo[buf].bufhidden = "wipe"
+		vim.bo[buf].swapfile = false
+		vim.api.nvim_buf_set_name(buf, "airtable://" .. record.id)
+
+		vim.api.nvim_set_current_buf(buf)
+	end)
 end
 
 return M
