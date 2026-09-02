@@ -23,17 +23,17 @@ vim.pack.add({
 
 ## Setup
 
-The Airtable API key is **never** stored in your config — it's read from an environment
-variable at runtime.
+The Airtable personal access token is **never** stored in your config — it's read from an
+environment variable at runtime.
 
 ```bash
 # ~/.zshrc, ~/.bashrc, etc. Never commit this value.
-export AIRTABLE_API_KEY="pat_..."
+export AIRTABLE_TOKEN="pat_..."
 ```
 
 ```lua
 require('airtable').setup({
-  api_key_env = 'AIRTABLE_API_KEY', -- name of the env var, not the key itself
+  token_env = 'AIRTABLE_TOKEN', -- name of the env var, not the token itself
   base_id = 'appXXXXXXXXXXXXXX',
   table_name = 'Tickets',
   fields = {

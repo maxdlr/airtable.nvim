@@ -7,7 +7,7 @@
 ---@field description string Airtable field name used as the record description
 
 ---@class AirtableConfig
----@field api_key_env string Name of the environment variable holding the Airtable PAT
+---@field token_env string Name of the environment variable holding the Airtable personal access token
 ---@field base_id string Airtable base id (e.g. "appXXXXXXXXXXXXXX")
 ---@field table_name string Airtable table name or table id
 ---@field fields AirtableFields
@@ -19,7 +19,7 @@ local M = {}
 
 ---@type AirtableConfig
 local defaults = {
-  api_key_env = 'AIRTABLE_API_KEY',
+  token_env = 'AIRTABLE_TOKEN',
   base_id = '',
   table_name = '',
   fields = {
@@ -68,18 +68,18 @@ function M.filter_names()
   return vim.tbl_map(function(f) return f.name end, M.options.filters)
 end
 
----Reads the Airtable API key from the configured environment variable.
+---Reads the Airtable personal access token from the configured environment variable.
 ---@return string?
-function M.api_key()
-  local key = os.getenv(M.options.api_key_env)
-  if not key or key == '' then
+function M.token()
+  local value = os.getenv(M.options.token_env)
+  if not value or value == '' then
     vim.notify(
-      string.format('[airtable.nvim] environment variable "%s" is not set', M.options.api_key_env),
+      string.format('[airtable.nvim] environment variable "%s" is not set', M.options.token_env),
       vim.log.levels.ERROR
     )
     return nil
   end
-  return key
+  return value
 end
 
 return M
