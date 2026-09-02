@@ -1,0 +1,77 @@
+local config = require("airtable.config")
+
+local M = {}
+
+local API_URL = "https://api.airtable.com/v0"
+
+---@class AirtableRecord
+---@field id string
+---@field createdTime string
+---@field fields table<string, any>
+
+---Builds the request URL for listing records, including the filter formula and pagination offset.
+---@param formula string
+---@param offset string?
+---@return string
+local function build_url(formula, offset)
+	local opts = config.options
+	local params = {
+		"filterByFormula=" .. vim.uri_encode(formula),
+		"pageSize=" .. tostring(opts.page_size),
+	}
+	if offset then
+		table.insert(params, "offset=" .. vim.uri_encode(offset))
+	end
+	return string.format(
+		"%s/%s/%s?%s",
+		API_URL,
+		opts.base_id,
+		vim.uri_encode(opts.table_name),
+		table.concat(params, "&")
+	)
+end
+
+---Fetches every page of records matching `formula` from Airtable.
+---@param formula string
+---@param callback fun(records: AirtableRecord[]?, err: string?)
+function M.list_records(formula, callback)
+	local api_key = config.api_key()
+	if not api_key then
+		callback(nil, "missing API key")
+		return
+	end
+
+	local curl = require("plenary.curl")
+	local records = {}
+
+	---@param offset string?
+	local function fetch_page(offset)
+		curl.get(build_url(formula, offset), {
+			headers = { Authorization = "Bearer " .. api_key },
+			callback = vim.schedule_wrap(function(response)
+				if response.status ~= 200 then
+					callback(nil, string.format("Airtable API error (%d): %s", response.status, response.body or ""))
+					return
+				end
+
+				local ok, decoded = pcall(vim.json.decode, response.body)
+				if not ok then
+					callback(nil, "failed to decode Airtable response")
+					return
+				end
+
+				vim.list_extend(records, decoded.records or {})
+
+				if decoded.offset then
+					fetch_page(decoded.offset)
+				else
+					callback(records, nil)
+				end
+			end),
+		})
+	end
+
+	fetch_page(nil)
+end
+
+return M
