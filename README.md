@@ -94,6 +94,18 @@ against the real column name in Airtable.
 Selecting a record opens a read-only scratch buffer rendering its title and description as
 markdown.
 
+### Keymapping individual filters
+
+Each filter can be bound to its own keymap by calling `require('airtable').open(name)`
+directly instead of going through the `:Airtable` command — useful for jumping straight to
+a specific view without typing its name:
+
+```lua
+-- <leader>jj → default filter, <leader>jt → the "Open bugs" filter
+vim.keymap.set('n', '<leader>jj', function() require('airtable').open() end, { desc = 'Airtable: default filter' })
+vim.keymap.set('n', '<leader>jt', function() require('airtable').open 'Open bugs' end, { desc = 'Airtable: open bugs' })
+```
+
 ## Scope of this POC
 
 - Only the title and description fields are rendered.
