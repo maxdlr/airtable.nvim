@@ -38,22 +38,42 @@ function M.format_field(value)
   return tostring(value)
 end
 
----Builds the request URL for listing records, including the optional filter formula,
----optional sort, and pagination offset.
+---Percent-encodes a URL path segment (RFC 3986: keep alphanumerics and `-._~`, escape
+---everything else as uppercase %XX). Used for the table name, since it can contain
+---spaces/emoji/non-ASCII characters and is a path segment rather than a query value
+---(`plenary.curl`'s `query` table option only encodes query values, not the path).
+---@param segment string
+---@return string
+local function encode_path_segment(segment)
+  return (segment:gsub('([^%w%-%.%_%~])', function(c) return string.format('%%%02X', c:byte()) end))
+end
+
+---Builds the request path (base + table, URL-escaped) for listing records. Query
+---parameters (filter, sort, pagination) are passed separately as a table so
+---`plenary.curl` can percent-encode them correctly — hand-building a query string with
+---`vim.uri_encode` mishandles reserved characters like `{`, `}`, `[`, `]` used in Airtable
+---formulas and `sort[0][field]`-style parameter names.
+---@return string
+local function build_path()
+  local opts = config.options
+  return string.format('%s/%s/%s', API_URL, opts.base_id, encode_path_segment(opts.table_name))
+end
+
+---Builds the query parameter table for one page of a list-records request.
 ---@param formula string?
 ---@param sort AirtableSort?
 ---@param offset string?
----@return string
-local function build_url(formula, sort, offset)
+---@return table<string, string>
+local function build_query(formula, sort, offset)
   local opts = config.options
-  local params = { 'pageSize=' .. tostring(opts.page_size) }
-  if formula then table.insert(params, 'filterByFormula=' .. vim.uri_encode(formula)) end
+  local query = { pageSize = tostring(opts.page_size) }
+  if formula then query.filterByFormula = formula end
   if sort then
-    table.insert(params, 'sort[0][field]=' .. vim.uri_encode(sort.field))
-    table.insert(params, 'sort[0][direction]=' .. vim.uri_encode(sort.order or 'asc'))
+    query['sort[0][field]'] = sort.field
+    query['sort[0][direction]'] = sort.order or 'asc'
   end
-  if offset then table.insert(params, 'offset=' .. vim.uri_encode(offset)) end
-  return string.format('%s/%s/%s?%s', API_URL, opts.base_id, vim.uri_encode(opts.table_name), table.concat(params, '&'))
+  if offset then query.offset = offset end
+  return query
 end
 
 ---Fetches every page of records matching `formula` (optional) from Airtable, ordered by
@@ -70,10 +90,12 @@ function M.list_records(formula, sort, callback)
 
   local curl = require 'plenary.curl'
   local records = {}
+  local path = build_path()
 
   ---@param offset string?
   local function fetch_page(offset)
-    curl.get(build_url(formula, sort, offset), {
+    curl.get(path, {
+      query = build_query(formula, sort, offset),
       headers = { Authorization = 'Bearer ' .. token },
       callback = vim.schedule_wrap(function(response)
         if response.status ~= 200 then
