@@ -40,6 +40,15 @@ require('airtable').setup({
     title = 'Name',
     description = 'Description',
   },
+  -- Sections shown in the picker's result line, left to right, separated by " │ ".
+  -- Defaults to just `fields.title`. Add more fields to show extra context
+  -- (status, assignee, etc.) — any Airtable field name works, and a missing
+  -- value on a given record renders as "—" instead of breaking the layout.
+  display = {
+    { field = 'Name', hl = 'TelescopeResultsIdentifier' },
+    { field = 'Status', hl = 'Comment' },
+    { field = 'Assignee', hl = 'Comment' },
+  },
   filters = {
     { name = 'Assigned to me', formula = "{Assignee} = 'Your Name'" },
     { name = 'Open bugs', formula = "AND({Status} != 'Done', {Type} = 'Bug')" },
@@ -51,6 +60,12 @@ require('airtable').setup({
 Filters are plain Lua table entries — add, edit, or remove them directly in your config.
 Each filter needs a `name` (shown in the picker/command) and a `formula`
 ([Airtable formula syntax](https://support.airtable.com/docs/formula-field-reference)).
+
+Every field name (`fields.title`, `fields.description`, `display[].field`, and any field
+referenced in a filter's `formula`) must match your Airtable base's actual field names exactly
+(case-sensitive) — these vary by team/base, so there is no universal default that works
+everywhere. If the picker shows record ids instead of titles, double check `fields.title`
+against the real column name in Airtable.
 
 ## Usage
 

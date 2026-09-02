@@ -6,11 +6,16 @@
 ---@field title string Airtable field name used as the record title
 ---@field description string Airtable field name used as the record description
 
+---@class AirtableDisplaySection
+---@field field string Airtable field name to render in this section
+---@field hl string? Highlight group for this section's text (default: a neutral comment color)
+
 ---@class AirtableConfig
 ---@field token_env string Name of the environment variable holding the Airtable personal access token
 ---@field base_id string Airtable base id (e.g. "appXXXXXXXXXXXXXX")
 ---@field table_name string Airtable table name or table id
 ---@field fields AirtableFields
+---@field display AirtableDisplaySection[] Ordered list of fields shown as separate sections in the picker
 ---@field filters AirtableFilter[]
 ---@field default_filter string Name of the filter selected when none is passed to `open()`
 ---@field page_size integer Airtable page size (max 100)
@@ -28,6 +33,9 @@ local defaults = {
     title = 'Name',
     description = 'Description',
   },
+  display = {
+    { field = 'Name', hl = 'TelescopeResultsIdentifier' },
+  },
   filters = {
     { name = 'Assigned to me', formula = "{Assignee} = 'Your Name'" },
   },
@@ -41,7 +49,14 @@ M.options = vim.deepcopy(defaults)
 ---Merges user options into the plugin defaults and validates required fields.
 ---@param opts AirtableConfig?
 function M.setup(opts)
-  M.options = vim.tbl_deep_extend('force', vim.deepcopy(defaults), opts or {})
+  opts = opts or {}
+  M.options = vim.tbl_deep_extend('force', vim.deepcopy(defaults), opts)
+
+  -- If the user customized `fields.title` but not `display`, default the display
+  -- section to that title field instead of the stale "Name" default.
+  if opts.fields and opts.fields.title and not opts.display then
+    M.options.display = { { field = opts.fields.title, hl = 'TelescopeResultsIdentifier' } }
+  end
 
   if M.options.base_id == '' then
     notify('Config Error', '"base_id" is not set', vim.log.levels.ERROR)
@@ -51,6 +66,9 @@ function M.setup(opts)
   end
   if #M.options.filters == 0 then
     notify('Config Warning', 'no filters configured', vim.log.levels.WARN)
+  end
+  if #M.options.display == 0 then
+    notify('Config Warning', 'no display sections configured', vim.log.levels.WARN)
   end
 end
 

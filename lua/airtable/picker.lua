@@ -3,11 +3,45 @@ local view = require 'airtable.view'
 
 local M = {}
 
----Builds the display string for a record entry in the picker.
+local entry_display = require 'telescope.pickers.entry_display'
+
+---Builds the plain-text ordinal string (used for fuzzy matching) from all configured
+---display sections, so search isn't limited to just the title.
 ---@param record AirtableRecord
 ---@return string
-local function display_title(record)
-  return record.fields[config.options.fields.title] or record.id
+local function ordinal_text(record)
+  local parts = {}
+  for _, section in ipairs(config.options.display) do
+    local value = record.fields[section.field]
+    if value ~= nil and value ~= '' then table.insert(parts, tostring(value)) end
+  end
+  return table.concat(parts, ' ')
+end
+
+---Builds the segmented `display` function for a record entry, one section per
+---configured display field, separated by " │ ". Missing fields are skipped.
+---All sections but the last auto-size to their content; the last fills remaining width.
+---@param record AirtableRecord
+---@return function
+local function make_display(record)
+  local sections = {}
+  for _, section in ipairs(config.options.display) do
+    local value = record.fields[section.field]
+    if value == nil or value == '' then value = '—' end
+    table.insert(sections, { tostring(value), section.hl or 'Comment' })
+  end
+
+  local items = {}
+  for i = 1, #sections do
+    items[i] = i == #sections and { remaining = true } or { width = nil }
+  end
+
+  local displayer = entry_display.create {
+    separator = ' │ ',
+    items = items,
+  }
+
+  return function() return displayer(sections) end
 end
 
 ---Opens a Telescope picker listing `records`; selecting an entry opens the record view buffer.
@@ -28,8 +62,8 @@ function M.pick(records, prompt_title)
         entry_maker = function(record)
           return {
             value = record,
-            display = display_title(record),
-            ordinal = display_title(record),
+            display = make_display(record),
+            ordinal = ordinal_text(record),
           }
         end,
       },
