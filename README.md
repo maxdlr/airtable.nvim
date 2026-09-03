@@ -151,6 +151,26 @@ pickers = {
 },
 ```
 
+#### `result_line[].hl`: conditional per-value colors
+
+Instead of one fixed color per section, `hl` can be a list of `{ value, color }` rules —
+the first rule whose `value` exactly matches the section's text wins, so each possible
+value (e.g. each `Status` option) gets its own color:
+
+```lua
+result_line = {
+  {
+    field = 'Status',
+    hl = {
+      { value = 'To do', color = '#E32424' },
+      { value = 'In progress', color = '#FFBF5E' },
+      { value = 'Done', color = '#5F94E3' },
+    },
+  },
+  { field = 'Title' },
+},
+```
+
 </details>
 
 ## Usage
