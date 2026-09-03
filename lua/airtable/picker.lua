@@ -135,9 +135,13 @@ local function make_previewer(result_line)
 	return previewers.new_buffer_previewer({
 		title = "Preview",
 		define_preview = function(self, entry)
-			local lines = view.render_lines(entry.value, { exclude = exclude, skip_missing = true })
+			local lines, extmarks = view.render_buffer(entry.value, { exclude = exclude, skip_missing = true })
 			vim.bo[self.state.bufnr].modifiable = true
 			vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, lines)
+			-- Clear any extmarks from a previous preview render before applying the new ones
+			-- (the previewer buffer is reused across selections, not recreated each time).
+			vim.api.nvim_buf_clear_namespace(self.state.bufnr, view.NAMESPACE, 0, -1)
+			view.apply_extmarks(self.state.bufnr, extmarks)
 			vim.bo[self.state.bufnr].filetype = "markdown"
 			-- Not modifiable/buftype nofile: this is a read-only preview of already-fetched
 			-- data, and linters/LSP that guard on `vim.bo.modifiable` (as this config's own

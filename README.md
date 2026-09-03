@@ -108,6 +108,20 @@ require('airtable').setup({
 If you skip `pickers` entirely, `:Airtable` lists every record in `table_name` — no
 filters required to get started.
 
+### Record styling
+
+Opening a record (and its Telescope preview) styles each `buffer.fields` entry based on
+its key name, no configuration needed:
+
+- Keys like `status`, `assignee`, `reviewer`, `type`, `priority`, or `label` render as a
+  colored pill — the color is derived deterministically from the field's value, so the
+  same value always gets the same color.
+- Keys like `name`, `title`, or `id` render with heading-style emphasis.
+- Everything else renders as plain text with a left border bar.
+
+Colors adapt to your colorscheme and never break the render — if a color can't be
+resolved for any reason, the plugin falls back to plain, unstyled text.
+
 <details>
 <summary><b>Advanced settings</b> (optional — click to expand)</summary>
 
