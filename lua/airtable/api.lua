@@ -142,6 +142,76 @@ function M.list_records(formula, sort, callback)
 	fetch_page(nil)
 end
 
+---Builds the request path (base + table + record, URL-escaped) for a record's comments.
+---@param record_id string
+---@return string
+local function build_record_comments_path(record_id)
+	local opts = config.options
+	return string.format(
+		"%s/%s/%s/%s/%s",
+		API_URL,
+		opts.base_id,
+		encode_path_segment(opts.table_name),
+		encode_path_segment(record_id),
+		"comments"
+	)
+end
+
+---Fetches every page of comments on a specific record. Airtable's comments endpoint does
+---not support a `sort` parameter (it 422s if one is sent), unlike the records endpoint.
+---@param record_id string
+---@param callback fun(comments: table[]?, err: AirtableError?)
+function M.list_record_comments(record_id, callback)
+	local token = config.token()
+	if not token then
+		callback(nil, { category = "Missing Token", message = "no Airtable personal access token configured" })
+		return
+	end
+
+	local curl = require("plenary.curl")
+	local comments = {}
+	local path = build_record_comments_path(record_id)
+
+	---@param offset string?
+	local function fetch_page(offset)
+		curl.get(path, {
+			query = build_query(nil, nil, offset),
+			headers = { Authorization = "Bearer " .. token },
+			-- Disable curl's URL globbing ("-g"): without it, curl interprets literal
+			-- "[" / "]" in query keys as its own range/glob syntax and fails with
+			-- "bad range in URL" instead of sending the request.
+			raw = { "-g" },
+			callback = vim.schedule_wrap(function(response)
+				if response.status ~= 200 then
+					callback(nil, {
+						category = string.format("API Error (%d)", response.status),
+						message = response.body or "no response body",
+					})
+					return
+				end
+
+				local ok, decoded = pcall(vim.json.decode, response.body)
+				if not ok then
+					callback(nil, { category = "Response Error", message = "failed to decode Airtable response" })
+					return
+				end
+
+				-- Airtable's comments endpoint returns `{ comments: [...] }`, unlike the
+				-- records endpoint's `{ records: [...] }`.
+				vim.list_extend(comments, decoded.comments or {})
+
+				if decoded.offset then
+					fetch_page(decoded.offset)
+				else
+					callback(comments, nil)
+				end
+			end),
+		})
+	end
+
+	fetch_page(nil)
+end
+
 ---Builds the request path (base + table, URL-escaped) for a specific record. Query
 ---parameters (filter, sort, pagination) are passed separately as a table so
 ---`plenary.curl` can percent-encode them correctly — hand-building a query string with
