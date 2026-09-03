@@ -125,8 +125,14 @@ local function make_previewer(result_line)
 		title = "Preview",
 		define_preview = function(self, entry)
 			local lines = view.render_lines(entry.value, { exclude = exclude, skip_missing = true })
+			vim.bo[self.state.bufnr].modifiable = true
 			vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, lines)
 			vim.bo[self.state.bufnr].filetype = "markdown"
+			-- Not modifiable/buftype nofile: this is a read-only preview of already-fetched
+			-- data, and linters/LSP that guard on `vim.bo.modifiable` (as this config's own
+			-- nvim-lint autocmd does) should skip it rather than lint a scratch buffer.
+			vim.bo[self.state.bufnr].modifiable = false
+			vim.bo[self.state.bufnr].buftype = "nofile"
 		end,
 	})
 end
