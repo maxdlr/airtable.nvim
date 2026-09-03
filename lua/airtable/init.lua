@@ -32,7 +32,7 @@ function M.open(picker_name)
       notify('No Records', string.format('no records for picker "%s"', picker.name), vim.log.levels.INFO)
       return
     end
-    require('airtable.picker').pick(records, picker.name, picker.result_line)
+    require('airtable.picker').pick(records, picker)
   end)
 end
 

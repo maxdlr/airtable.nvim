@@ -108,6 +108,35 @@ require('airtable').setup({
 If you skip `pickers` entirely, `:Airtable` lists every record in `table_name` — no
 filters required to get started.
 
+<details>
+<summary><b>Advanced settings</b> (optional — click to expand)</summary>
+
+#### `result_line_prefix`: conditional icons
+
+Add a leading icon to a picker's result line based on a record's field value — useful for
+status/priority/assignee-style visual markers. Evaluated locally against already-fetched
+data (no extra requests). The first matching condition wins; no match means no icon.
+
+```lua
+pickers = {
+  {
+    name = 'Tickets',
+    result_line = {
+      { field = 'Title' },
+      { field = 'Status' },
+    },
+    result_line_prefix = {
+      -- { icon, condition } pairs, checked in order — condition uses the same shape as `filters`
+      { '📝', { field = 'Status', value = 'In progress' } },
+      { '▶️', { field = 'Status', value = 'To do' } },
+      { '✅', { field = 'Status', value = 'Done', only = true } }, -- only=true still works here
+    },
+  },
+},
+```
+
+</details>
+
 ## Usage
 
 ```vim

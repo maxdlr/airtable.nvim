@@ -23,6 +23,10 @@
 ---@field filters AirtableFilterCondition[]? Conditions combined with AND. Omit to list all records.
 ---@field sort AirtableSort? How to order results (translated to Airtable's `sort[]` API param)
 ---@field result_line AirtableResultSection[] Ordered sections shown in this picker's result line
+---@field result_line_prefix {[1]: string, [2]: AirtableFilterCondition}[]? Advanced/optional:
+---  an ordered list of `{ icon, condition }` pairs. For each record, the first condition
+---  that matches has its icon prepended to the result line; records matching no condition
+---  get no prefix. Evaluated client-side against already-fetched data — no extra requests.
 
 ---@class AirtableBufferConfig
 ---@field fields table<string, string> Arbitrary named fields to render in the record buffer.
@@ -107,6 +111,55 @@ local function build_formula(picker)
   if #picker.filters == 1 then return condition_formula(picker.filters[1]) end
   local parts = vim.tbl_map(condition_formula, picker.filters)
   return string.format('AND(%s)', table.concat(parts, ', '))
+end
+
+---Checks whether a single value matches a condition's expected value, mirroring the
+---server-side formula semantics: substring match by default, exact match when `only` is
+---set. Comparison is done on the plain-text form of the record's raw field value, via the
+---same formatter used for display (`airtable.api.format_field`), so array-shaped fields
+---(collaborators, linked records, multi-select) are handled the same way here as server-side.
+---@param actual_text string
+---@param expected string
+---@param only boolean?
+---@return boolean
+local function value_matches(actual_text, expected, only)
+  expected = tostring(expected)
+  if only then return actual_text == expected end
+  return actual_text:find(expected, 1, true) ~= nil
+end
+
+---Checks whether `record` matches a filter condition, client-side. Used by
+---`result_line_prefix` to pick an icon without an extra API round-trip. Mirrors
+---`condition_formula`'s semantics (contains-by-default, `only` for exact, list `value`
+---for OR) so a condition behaves the same whether sent to Airtable or evaluated locally.
+---@param record AirtableRecord
+---@param condition AirtableFilterCondition
+---@return boolean
+function M.matches_condition(record, condition)
+  local format_field = require('airtable.api').format_field
+  local actual_text = format_field(record.fields[condition.field])
+
+  if type(condition.value) == 'table' then
+    for _, v in ipairs(condition.value) do
+      if value_matches(actual_text, v, condition.only) then return true end
+    end
+    return false
+  end
+  return value_matches(actual_text, condition.value, condition.only)
+end
+
+---Resolves a picker's `result_line_prefix` icon for `record`: the icon of the first
+---condition that matches, or "" if none match or `result_line_prefix` is unset.
+---@param record AirtableRecord
+---@param picker AirtablePicker
+---@return string
+function M.resolve_prefix_icon(record, picker)
+  if not picker.result_line_prefix then return '' end
+  for _, rule in ipairs(picker.result_line_prefix) do
+    local icon, condition = rule[1], rule[2]
+    if M.matches_condition(record, condition) then return icon end
+  end
+  return ''
 end
 
 ---Merges user options into the plugin defaults and validates required fields.

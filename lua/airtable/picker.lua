@@ -62,15 +62,22 @@ local function ordinal_text(record, result_line)
 	return table.concat(parts, " ")
 end
 
----Builds the segmented `display` function for a record entry, one section per
----`result_line` entry, separated by " │ ". Missing fields render as "—".
+---Builds the segmented `display` function for a record entry: an optional leading icon
+---resolved from `picker.result_line_prefix` (advanced/optional, see config docs), followed
+---by one section per `result_line` entry, separated by " │ ". Missing fields render as "—".
 ---All sections but the last auto-size to their content; the last fills remaining width.
 ---@param record AirtableRecord
----@param result_line AirtableResultSection[]
+---@param picker AirtablePicker
 ---@return function
-local function make_display(record, result_line)
+local function make_display(record, picker)
 	local sections = {}
-	for i, section in ipairs(result_line) do
+
+	local icon = config.resolve_prefix_icon(record, picker)
+	if icon ~= "" then
+		table.insert(sections, { icon, "Normal" })
+	end
+
+	for i, section in ipairs(picker.result_line) do
 		local text = format_field(record.fields[section.field])
 		if text == "" then
 			text = "—"
@@ -139,9 +146,8 @@ end
 
 ---Opens a Telescope picker listing `records`; selecting an entry opens the record view buffer.
 ---@param records AirtableRecord[]
----@param prompt_title string
----@param result_line AirtableResultSection[] Sections to render per result line
-function M.pick(records, prompt_title, result_line)
+---@param picker AirtablePicker
+function M.pick(records, picker)
 	local pickers = require("telescope.pickers")
 	local finders = require("telescope.finders")
 	local conf = require("telescope.config").values
@@ -150,19 +156,19 @@ function M.pick(records, prompt_title, result_line)
 
 	pickers
 		.new({}, {
-			prompt_title = prompt_title,
+			prompt_title = picker.name,
 			finder = finders.new_table({
 				results = records,
 				entry_maker = function(record)
 					return {
 						value = record,
-						display = make_display(record, result_line),
-						ordinal = ordinal_text(record, result_line),
+						display = make_display(record, picker),
+						ordinal = ordinal_text(record, picker.result_line),
 					}
 				end,
 			}),
 			sorter = conf.generic_sorter({}),
-			previewer = make_previewer(result_line),
+			previewer = make_previewer(picker.result_line),
 			attach_mappings = function(prompt_bufnr, map)
 				actions.select_default:replace(function()
 					--@type AirtableRecord
