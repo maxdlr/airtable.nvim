@@ -9,8 +9,15 @@ local M = {}
 ---configured) becomes the H1 heading; every other key becomes its own section, titled
 ---with the key name capitalized (e.g. `tododev` -> "## Tododev").
 ---@param record AirtableRecord
+---@param opts { exclude: table<string, boolean>?, skip_missing: boolean? }? `exclude`:
+---  set of `buffer.fields` keys to omit entirely (e.g. fields already shown in a picker's
+---  `result_line`). `skip_missing`: when true, a field absent from `record.fields` is
+---  omitted instead of rendered as "_Empty._" — used for previews built from list data,
+---  where a field's absence just means it wasn't fetched, not that it's actually empty.
 ---@return string[]
-local function render_lines(record)
+local function render_lines(record, opts)
+	opts = opts or {}
+	local exclude = opts.exclude or {}
 	local fields = config.options.buffer.fields
 	local title = fields.title and format_field(record.fields[fields.title]) or ""
 	if title == "" then
@@ -24,7 +31,7 @@ local function render_lines(record)
 	-- revisited to use an ordered list instead of a plain table for `fields`.)
 	local other_keys = {}
 	for key in pairs(fields) do
-		if key ~= "title" then
+		if key ~= "title" and not exclude[key] then
 			table.insert(other_keys, key)
 		end
 	end
@@ -32,7 +39,12 @@ local function render_lines(record)
 
 	for _, key in ipairs(other_keys) do
 		local field_name = fields[key]
-		local text = format_field(record.fields[field_name])
+		local raw_value = record.fields[field_name]
+		if raw_value == nil and opts.skip_missing then
+			goto continue
+		end
+
+		local text = format_field(raw_value)
 		if text == "" then
 			text = "_Empty._"
 		end
@@ -40,10 +52,13 @@ local function render_lines(record)
 		vim.list_extend(lines, { "## " .. heading, "" })
 		vim.list_extend(lines, vim.split(text, "\n", { plain = true }))
 		table.insert(lines, "")
+
+		::continue::
 	end
 
 	return lines
 end
+M.render_lines = render_lines
 
 ---Opens `vim.ui.select` with the record's available actions: open in browser, browse
 ---comments, or copy the record URL.

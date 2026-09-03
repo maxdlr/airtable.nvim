@@ -1,9 +1,11 @@
+local config = require("airtable.config")
 local view = require("airtable.view")
 local format_field = require("airtable.api").format_field
 
 local M = {}
 
 local entry_display = require("telescope.pickers.entry_display")
+local previewers = require("telescope.previewers")
 
 ---Default highlight groups by section position, used when a `result_line` entry omits
 ---`hl`: 1st section stands out as the identifier, 2nd as a secondary comment, everything
@@ -91,6 +93,44 @@ local function make_display(record, result_line)
 	end
 end
 
+---Builds the set of `buffer.fields` keys whose Airtable field name is already shown in
+---`result_line`, so the preview doesn't repeat what's already visible in the result row.
+---@param result_line AirtableResultSection[]
+---@return table<string, boolean>
+local function buffer_keys_shown_in_result_line(result_line)
+	local shown_field_names = {}
+	for _, section in ipairs(result_line) do
+		shown_field_names[section.field] = true
+	end
+
+	local exclude = {}
+	for key, field_name in pairs(config.options.buffer.fields) do
+		if shown_field_names[field_name] then
+			exclude[key] = true
+		end
+	end
+	return exclude
+end
+
+---Builds a previewer that renders a record's `buffer.fields` (minus whatever `result_line`
+---already shows) as markdown, using only the data already fetched by the picker — no
+---extra request per preview. Fields absent from the record (e.g. not present on this
+---particular record) are silently omitted rather than shown as empty.
+---@param result_line AirtableResultSection[]
+---@return table
+local function make_previewer(result_line)
+	local exclude = buffer_keys_shown_in_result_line(result_line)
+
+	return previewers.new_buffer_previewer({
+		title = "Preview",
+		define_preview = function(self, entry)
+			local lines = view.render_lines(entry.value, { exclude = exclude, skip_missing = true })
+			vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, lines)
+			vim.bo[self.state.bufnr].filetype = "markdown"
+		end,
+	})
+end
+
 ---Opens a Telescope picker listing `records`; selecting an entry opens the record view buffer.
 ---@param records AirtableRecord[]
 ---@param prompt_title string
@@ -116,6 +156,7 @@ function M.pick(records, prompt_title, result_line)
 				end,
 			}),
 			sorter = conf.generic_sorter({}),
+			previewer = make_previewer(result_line),
 			attach_mappings = function(prompt_bufnr, map)
 				actions.select_default:replace(function()
 					--@type AirtableRecord
