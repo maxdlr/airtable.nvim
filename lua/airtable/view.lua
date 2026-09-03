@@ -23,6 +23,12 @@ local LEFT_BORDER_HL = "Comment"
 ---@param text string
 ---@return { [1]: string, [2]: string }[]
 local function pill_line_chunks(heading, text)
+  -- An empty/absent value isn't really a "status" to badge — render it as a plain,
+  -- dim label instead of wrapping the "_Empty._" placeholder in a colored pill.
+  if text == "_Empty._" then
+    return { { heading .. ': ', 'Title' }, { text, 'Comment' } }
+  end
+
   local ok, chunks = pcall(function()
     local hex = colors.color_for_value(text)
     local pill_chunks = bubble.make_bubble(text, hex)

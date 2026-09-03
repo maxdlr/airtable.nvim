@@ -7,10 +7,12 @@ local colors = require 'airtable.colors'
 
 local M = {}
 
--- Powerline-style rounded caps, available in any Nerd Font. If the user's font lacks
--- them, they'll render as tofu/blank glyphs — a font issue, not a plugin crash.
-local LEFT_CAP = ''
-local RIGHT_CAP = ''
+-- Powerline-style rounded caps (U+E0B6 left, U+E0B4 right), available in any Nerd Font.
+-- Written as explicit UTF-8 byte escapes rather than literal characters, so the exact
+-- codepoint survives regardless of editor/terminal encoding when this file is edited.
+-- U+E0B6 = 0xEE 0x82 0xB6, U+E0B4 = 0xEE 0x82 0xB4 in UTF-8.
+local LEFT_CAP = '\238\130\182'
+local RIGHT_CAP = '\238\130\180'
 
 ---Builds the three `{ text, highlight }` chunks that make up a pill: a left cap, the
 ---padded body, and a right cap. Intended to be written into a buffer via
