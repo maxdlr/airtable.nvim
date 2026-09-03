@@ -22,7 +22,7 @@ record's Airtable URL.
 vim.pack.add({
   'https://github.com/nvim-lua/plenary.nvim',
   'https://github.com/nvim-telescope/telescope.nvim',
-  'https://github.com/you/airtable.nvim',
+  'https://github.com/maxdlr/airtable.nvim',
 })
 ```
 
