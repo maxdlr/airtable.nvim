@@ -182,6 +182,25 @@ local function open_context_menu(record_id)
 	end)
 end
 
+---Finds the URL under the cursor on the current line, if any. Scans the line for
+---`http(s)://`-prefixed spans and returns the one containing the cursor column.
+---@return string?
+local function url_under_cursor()
+	local ok, result = pcall(function()
+		local line = vim.api.nvim_get_current_line()
+		local cursor_col = vim.api.nvim_win_get_cursor(0)[2] -- 0-based byte column
+		for start_col, url in line:gmatch("()(https?://[^%s%)%]>\"']+)") do
+			local end_col = start_col + #url - 1
+			if cursor_col >= start_col - 1 and cursor_col <= end_col - 1 then
+				return url
+			end
+		end
+		return nil
+	end)
+	if ok then return result end
+	return nil
+end
+
 ---Opens a non-writable scratch buffer showing the record formatted as markdown.
 ---@param record_id string
 function M.open(record_id)
@@ -211,6 +230,25 @@ function M.open(record_id)
 		vim.keymap.set("n", "<CR>", function()
 			open_context_menu(record.id)
 		end, { buffer = buf, desc = "Airtable record actions" })
+
+		vim.keymap.set("n", "o", function()
+			local url = url_under_cursor()
+			if not url then
+				notify("No URL", "no URL under cursor", vim.log.levels.INFO)
+				return
+			end
+			vim.ui.open(url)
+		end, { buffer = buf, desc = "Open URL under cursor" })
+
+		vim.keymap.set("n", "c", function()
+			local url = url_under_cursor()
+			if not url then
+				notify("No URL", "no URL under cursor", vim.log.levels.INFO)
+				return
+			end
+			vim.fn.setreg("+", url)
+			notify("Copied", "URL copied to clipboard", vim.log.levels.INFO)
+		end, { buffer = buf, desc = "Copy URL under cursor" })
 
 		vim.api.nvim_set_current_buf(buf)
 	end)
