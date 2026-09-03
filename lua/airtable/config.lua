@@ -18,15 +18,22 @@
 ---  -> "TelescopeResultsIdentifier", 2nd -> "TelescopeResultsSpecialComment", others ->
 ---  "TelescopeResultsComment".
 
+---@class AirtablePrefixIcon
+---@field icon string The icon/glyph to render
+---@field color string? Highlight group name, or a hex color like "#FFFFFF" (a highlight
+---  group is created automatically for hex colors). Defaults to no special coloring.
+
 ---@class AirtablePicker
 ---@field name string Display name shown in the picker/command completion
 ---@field filters AirtableFilterCondition[]? Conditions combined with AND. Omit to list all records.
 ---@field sort AirtableSort? How to order results (translated to Airtable's `sort[]` API param)
 ---@field result_line AirtableResultSection[] Ordered sections shown in this picker's result line
----@field result_line_prefix {[1]: string, [2]: AirtableFilterCondition}[]? Advanced/optional:
----  an ordered list of `{ icon, condition }` pairs. For each record, the first condition
----  that matches has its icon prepended to the result line; records matching no condition
----  get no prefix. Evaluated client-side against already-fetched data — no extra requests.
+---@field result_line_prefix {[1]: string|AirtablePrefixIcon, [2]: AirtableFilterCondition}[]?
+---  Advanced/optional: an ordered list of `{ icon, condition }` pairs. `icon` is either a
+---  plain string, or a `{ icon = ..., color = ... }` table to color it. For each record, the
+---  first condition that matches has its icon prepended to the result line; records
+---  matching no condition get no prefix. Evaluated client-side against already-fetched
+---  data — no extra requests.
 
 ---@class AirtableBufferConfig
 ---@field fields table<string, string> Arbitrary named fields to render in the record buffer.
@@ -148,11 +155,14 @@ function M.matches_condition(record, condition)
   return value_matches(actual_text, condition.value, condition.only)
 end
 
----Resolves a picker's `result_line_prefix` icon for `record`: the icon of the first
----condition that matches, or "" if none match or `result_line_prefix` is unset.
+---Resolves a picker's `result_line_prefix` icon spec for `record`: the icon of the first
+---condition that matches (a plain string, or a `{ icon, color }` table — see
+---`AirtablePrefixIcon`), or "" if none match or `result_line_prefix` is unset. Returned
+---as-is/unresolved; rendering (e.g. turning `color` into a highlight group) is the
+---caller's responsibility.
 ---@param record AirtableRecord
 ---@param picker AirtablePicker
----@return string
+---@return string|AirtablePrefixIcon
 function M.resolve_prefix_icon(record, picker)
   if not picker.result_line_prefix then return '' end
   for _, rule in ipairs(picker.result_line_prefix) do

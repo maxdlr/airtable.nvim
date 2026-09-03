@@ -130,6 +130,8 @@ pickers = {
       { '📝', { field = 'Status', value = 'In progress' } },
       { '▶️', { field = 'Status', value = 'To do' } },
       { '✅', { field = 'Status', value = 'Done', only = true } }, -- only=true still works here
+      -- icon can also be a table to color it: { icon = '...', color = <hl group or hex> }
+      { { icon = '󰲶', color = '#FFFFFF' }, { field = 'Status', value = 'Blocked' } },
     },
   },
 },

@@ -72,9 +72,13 @@ end
 local function make_display(record, picker)
 	local sections = {}
 
-	local icon = config.resolve_prefix_icon(record, picker)
-	if icon ~= "" then
-		table.insert(sections, { icon, "Normal" })
+	local icon_spec = config.resolve_prefix_icon(record, picker)
+	if icon_spec ~= "" then
+		if type(icon_spec) == "table" then
+			table.insert(sections, { icon_spec.icon, resolve_hl(icon_spec.color or "Normal", 0) })
+		else
+			table.insert(sections, { icon_spec, "Normal" })
+		end
 	end
 
 	for i, section in ipairs(picker.result_line) do
