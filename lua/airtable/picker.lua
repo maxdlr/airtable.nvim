@@ -218,6 +218,11 @@ function M.pick(picker, fetch_records)
 		end
 
 		if vim.api.nvim_buf_is_valid(current_picker.prompt_bufnr) then
+			pcall(function()
+				if current_picker.layout.prompt.border then
+					current_picker.layout.prompt.border:change_title(picker.name)
+				end
+			end)
 			current_picker:refresh(make_finder(records, picker), { reset_prompt = false })
 		end
 	end)
