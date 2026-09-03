@@ -54,7 +54,8 @@ end
 
 ---Opens a small centered floating scratch buffer prefilled with `current_value`. The
 ---buffer is `acwrite` (Neovim will call a `BufWriteCmd` instead of writing to disk), so
----`:w`/`:wa` PATCHes the field to the buffer's content instead of saving a file.
+---`<C-CR>` (primary) or `:w`/`:wa` PATCHes the field to the buffer's content instead of
+---saving a file. `:q` discards the changes without saving.
 ---@param record_id string
 ---@param field string Airtable field name
 ---@param current_value string
@@ -77,10 +78,14 @@ function M.edit_text(record_id, field, current_value, on_updated)
     row = math.floor((vim.o.lines - height) / 2),
     col = math.floor((vim.o.columns - width) / 2),
     border = 'rounded',
-    title = string.format(' Edit %s (:w or :wa to save, :q to cancel) ', field),
+    title = string.format(' Edit %s (<C-CR> or :w to save, :q to cancel) ', field),
     title_pos = 'center',
     style = 'minimal',
   })
+
+  -- <C-CR> is the primary "confirm and save" keymap; :w/:wa keep working too since both
+  -- go through the same BufWriteCmd below.
+  vim.keymap.set({ 'n', 'i' }, '<C-CR>', '<cmd>write<cr>', { buffer = buf, desc = 'Save edit' })
 
   vim.api.nvim_create_autocmd('BufWriteCmd', {
     buffer = buf,

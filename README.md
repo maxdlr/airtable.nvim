@@ -201,8 +201,8 @@ Each `buffer.editable` entry adds an "Edit `<field>`" (or a custom `name`) actio
 - **`type = 'select'`** — opens a Telescope picker listing the field's valid choices
   (fetched from Airtable). Pressing `<CR>` on a choice saves it immediately.
 - **`type = 'text'`** — opens a small centered floating buffer prefilled with the
-  field's current value. Edit it like a normal buffer, then `:w` or `:wa` to save (or
-  `:q` to discard your changes without writing).
+  field's current value. Edit it like a normal buffer, then `<C-CR>` (or `:w`/`:wa`) to
+  save, or `:q` to discard your changes without writing.
 
 After a successful edit, the record buffer refreshes in place to show the new value.
 
