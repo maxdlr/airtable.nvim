@@ -207,6 +207,7 @@ end
 ---"buffer already exists" when reopening the same record.
 ---@param record_id string
 function M.open(record_id)
+	notify("Loading", "fetching record...", vim.log.levels.INFO)
 	api.get_recordById(record_id, function(record, err)
 		if err then
 			notify(err.category, err.message, vim.log.levels.ERROR)

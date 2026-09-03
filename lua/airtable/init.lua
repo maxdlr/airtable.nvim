@@ -1,5 +1,4 @@
 local config = require 'airtable.config'
-local notify = require('airtable.notify').notify
 
 local M = {}
 
@@ -23,16 +22,8 @@ function M.open(picker_name)
     return
   end
 
-  require('airtable.api').list_records(picker.formula, picker.sort, function(records, err)
-    if err then
-      notify(err.category, err.message, vim.log.levels.ERROR)
-      return
-    end
-    if #records == 0 then
-      notify('No Records', string.format('no records for picker "%s"', picker.name), vim.log.levels.INFO)
-      return
-    end
-    require('airtable.picker').pick(records, picker)
+  require('airtable.picker').pick(picker, function(callback)
+    require('airtable.api').list_records(picker.formula, picker.sort, callback)
   end)
 end
 

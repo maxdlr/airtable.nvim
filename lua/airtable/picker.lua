@@ -152,44 +152,75 @@ local function make_previewer(result_line)
 	})
 end
 
----Opens a Telescope picker listing `records`; selecting an entry opens the record view buffer.
+---Builds the Telescope finder for a list of records, matching `picker`'s display config.
 ---@param records AirtableRecord[]
 ---@param picker AirtablePicker
-function M.pick(records, picker)
+---@return table finder
+local function make_finder(records, picker)
+	local finders = require("telescope.finders")
+	return finders.new_table({
+		results = records,
+		entry_maker = function(record)
+			return {
+				value = record,
+				display = make_display(record, picker),
+				ordinal = ordinal_text(record, picker.result_line),
+			}
+		end,
+	})
+end
+
+---Opens a Telescope picker for `picker` immediately (with a "Loading…" prompt title and no
+---results yet), then calls `fetch_records(callback)` to fetch the actual data and refreshes
+---the picker in place once it arrives — so the UI shows up right away instead of the whole
+---command appearing to hang while the network request is in flight.
+---@param picker AirtablePicker
+---@param fetch_records fun(callback: fun(records: AirtableRecord[]?, err: AirtableError?))
+function M.pick(picker, fetch_records)
 	local pickers = require("telescope.pickers")
 	local finders = require("telescope.finders")
 	local conf = require("telescope.config").values
 	local actions = require("telescope.actions")
 	local action_state = require("telescope.actions.state")
+	local notify = require("airtable.notify").notify
 
-	pickers
-		.new({}, {
-			prompt_title = picker.name,
-			finder = finders.new_table({
-				results = records,
-				entry_maker = function(record)
-					return {
-						value = record,
-						display = make_display(record, picker),
-						ordinal = ordinal_text(record, picker.result_line),
-					}
-				end,
-			}),
-			sorter = conf.generic_sorter({}),
-			previewer = make_previewer(picker.result_line),
-			attach_mappings = function(prompt_bufnr, map)
-				actions.select_default:replace(function()
-					--@type AirtableRecord
-					local selection = action_state.get_selected_entry()
-					actions.close(prompt_bufnr)
-					if selection then
-						view.open(selection.value.id)
-					end
-				end)
-				return true
-			end,
-		})
-		:find()
+	local current_picker = pickers.new({}, {
+		prompt_title = picker.name .. " (loading…)",
+		finder = finders.new_table({ results = {} }),
+		sorter = conf.generic_sorter({}),
+		previewer = make_previewer(picker.result_line),
+		attach_mappings = function(prompt_bufnr, map)
+			actions.select_default:replace(function()
+				--@type AirtableRecord
+				local selection = action_state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				if selection then
+					view.open(selection.value.id)
+				end
+			end)
+			return true
+		end,
+	})
+	current_picker:find()
+
+	fetch_records(function(records, err)
+		if err then
+			-- Nothing to browse: close the (empty) picker and surface the error instead of
+			-- leaving a permanently-loading, unusable prompt open.
+			pcall(actions.close, current_picker.prompt_bufnr)
+			notify(err.category, err.message, vim.log.levels.ERROR)
+			return
+		end
+		if #records == 0 then
+			pcall(actions.close, current_picker.prompt_bufnr)
+			notify("No Records", string.format('no records for picker "%s"', picker.name), vim.log.levels.INFO)
+			return
+		end
+
+		if vim.api.nvim_buf_is_valid(current_picker.prompt_bufnr) then
+			current_picker:refresh(make_finder(records, picker), { reset_prompt = false })
+		end
+	end)
 end
 
 return M
