@@ -53,9 +53,10 @@ function M.edit_select(record_id, field, on_updated)
 end
 
 ---Opens a small centered floating scratch buffer prefilled with `current_value`. The
----buffer is `acwrite` (Neovim will call a `BufWriteCmd` instead of writing to disk), so
----`<C-CR>` (primary) or `:w`/`:wa` PATCHes the field to the buffer's content instead of
----saving a file. `:q` discards the changes without saving.
+---buffer is a plain scratch buffer (`buftype=nofile`, not `acwrite`) — deliberately not
+---wired to `:w`/`:wa`/`BufWriteCmd`, so tools like auto-save.nvim (which react to
+---`InsertLeave`/`TextChanged`/`BufLeave`) can't trigger a premature save while the user is
+---still editing. `<C-CR>` is the only way to save; `:q` discards the changes.
 ---@param record_id string
 ---@param field string Airtable field name
 ---@param current_value string
@@ -63,14 +64,14 @@ end
 function M.edit_text(record_id, field, current_value, on_updated)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(current_value, '\n', { plain = true }))
-  vim.bo[buf].buftype = 'acwrite'
+  vim.bo[buf].buftype = 'nofile'
   vim.bo[buf].bufhidden = 'wipe'
   vim.bo[buf].swapfile = false
   vim.bo[buf].filetype = 'markdown'
   vim.api.nvim_buf_set_name(buf, 'airtable-edit://' .. record_id .. '/' .. field)
 
-  local width = math.min(80, math.floor(vim.o.columns * 0.6))
-  local height = math.min(20, math.floor(vim.o.lines * 0.4))
+  local width = math.min(120, math.floor(vim.o.columns * 0.8))
+  local height = math.min(35, math.floor(vim.o.lines * 0.7))
   local win = vim.api.nvim_open_win(buf, true, {
     relative = 'editor',
     width = width,
@@ -78,37 +79,29 @@ function M.edit_text(record_id, field, current_value, on_updated)
     row = math.floor((vim.o.lines - height) / 2),
     col = math.floor((vim.o.columns - width) / 2),
     border = 'rounded',
-    title = string.format(' Edit %s (<C-CR> or :w to save, :q to cancel) ', field),
+    title = string.format(' Edit %s (<C-CR> to save, :q to cancel) ', field),
     title_pos = 'center',
     style = 'minimal',
   })
 
-  -- <C-CR> is the primary "confirm and save" keymap; :w/:wa keep working too since both
-  -- go through the same BufWriteCmd below.
-  vim.keymap.set({ 'n', 'i' }, '<C-CR>', '<cmd>write<cr>', { buffer = buf, desc = 'Save edit' })
+  local function save()
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    local new_value = table.concat(lines, '\n')
 
-  vim.api.nvim_create_autocmd('BufWriteCmd', {
-    buffer = buf,
-    callback = function()
-      local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-      local new_value = table.concat(lines, '\n')
+    api.update_record(record_id, field, new_value, function(record, err)
+      if err then
+        notify(err.category, err.message, vim.log.levels.ERROR)
+        return
+      end
+      notify('Updated', string.format('%s saved', field), vim.log.levels.INFO)
+      if vim.api.nvim_win_is_valid(win) then
+        vim.api.nvim_win_close(win, true)
+      end
+      on_updated(record)
+    end)
+  end
 
-      api.update_record(record_id, field, new_value, function(record, err)
-        if err then
-          notify(err.category, err.message, vim.log.levels.ERROR)
-          return
-        end
-        -- Clear the "modified" flag so :q doesn't warn about unsaved changes, and
-        -- close the floating window now that the save succeeded.
-        vim.bo[buf].modified = false
-        notify('Updated', string.format('%s saved', field), vim.log.levels.INFO)
-        if vim.api.nvim_win_is_valid(win) then
-          vim.api.nvim_win_close(win, true)
-        end
-        on_updated(record)
-      end)
-    end,
-  })
+  vim.keymap.set({ 'n', 'i' }, '<C-CR>', save, { buffer = buf, desc = 'Save edit' })
 end
 
 return M
