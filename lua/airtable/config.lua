@@ -49,18 +49,17 @@ local defaults = {
   table_name = '',
   buffer = {
     fields = {
-      title = 'Name',
+      title = 'Title',
       description = 'Description',
     },
   },
   pickers = {
     {
-      name = 'Assigned to me',
-      filters = { { field = 'Assignee', value = 'Your Name' } },
-      result_line = { { field = 'Name' } },
+      name = 'All records',
+      result_line = { { field = 'Title' } },
     },
   },
-  default_filter = 'Assigned to me',
+  default_filter = 'All records',
   page_size = 100,
 }
 

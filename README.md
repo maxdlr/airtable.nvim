@@ -78,7 +78,7 @@ require('airtable').setup({
 
   buffer = {
     fields = {                    -- arbitrary fields rendered when a record is opened
-      title = 'Name',             -- "title" is special: rendered as the H1 heading
+      title = 'Title',            -- "title" is special: rendered as the H1 heading
       description = 'Description',-- any other key becomes its own "## <Key>" section
     },
   },
@@ -92,7 +92,7 @@ require('airtable').setup({
       },
       sort = { field = 'Priority', order = 'asc' }, -- optional; order: 'asc' or 'desc'
       result_line = {              -- columns shown per row, left to right
-        { field = 'Name' },        -- hl omitted: defaults to an identifier color
+        { field = 'Title' },       -- hl omitted: defaults to an identifier color
         { field = 'Status', hl = '#FFA500' }, -- hl: a highlight group or hex color
       },
     },
@@ -104,6 +104,9 @@ require('airtable').setup({
 
 > Every field name above must match your Airtable base's actual column names exactly
 > (case-sensitive) — there's no universal default, since this varies by base.
+
+If you skip `pickers` entirely, `:Airtable` lists every record in `table_name` — no
+filters required to get started.
 
 ## Usage
 
