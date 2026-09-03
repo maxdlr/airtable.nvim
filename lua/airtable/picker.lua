@@ -20,17 +20,31 @@ local DEFAULT_HL_FALLBACK = "TelescopeResultsComment"
 ---picker invocations) don't keep redefining the same highlight group.
 local hex_hl_cache = {}
 
----Resolves a `result_line` section's `hl` to a highlight group name. Accepts either an
----existing highlight group name (used as-is) or a hex color like "#FFFFFF" (a highlight
----group is lazily created and cached for it). When `hl` is omitted, falls back to a
----sensible default based on the section's position (see `DEFAULT_HL_BY_POSITION`).
----@param hl string?
+---Resolves a `result_line` section's `hl` to a highlight group name. `hl` accepts:
+---  - nil: falls back to a sensible default based on the section's position (see
+---    `DEFAULT_HL_BY_POSITION`).
+---  - a highlight group name or hex color like "#FFFFFF", used unconditionally.
+---  - a list of `{ value = ..., color = ... }` rules: the first rule whose `value`
+---    matches `text` exactly wins; if none match, falls back to the position-based
+---    default (same as `hl == nil`).
+---@param hl string|{value: string, color: string}[]|nil
 ---@param position integer 1-based index of this section within its result_line
+---@param text string? The section's actual displayed text, needed to evaluate conditional rules
 ---@return string
-local function resolve_hl(hl, position)
-	if not hl then
+local function resolve_hl(hl, position, text)
+	if hl == nil then
 		return DEFAULT_HL_BY_POSITION[position] or DEFAULT_HL_FALLBACK
 	end
+
+	if type(hl) == "table" then
+		for _, rule in ipairs(hl) do
+			if rule.value == text then
+				return resolve_hl(rule.color, position, text)
+			end
+		end
+		return DEFAULT_HL_BY_POSITION[position] or DEFAULT_HL_FALLBACK
+	end
+
 	if not hl:match("^#%x%x%x%x%x%x$") then
 		return hl
 	end
@@ -86,7 +100,7 @@ local function make_display(record, picker)
 		if text == "" then
 			text = "—"
 		end
-		table.insert(sections, { text, resolve_hl(section.hl, i) })
+		table.insert(sections, { text, resolve_hl(section.hl, i, text) })
 	end
 
 	local items = {}

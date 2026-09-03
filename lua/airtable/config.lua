@@ -11,12 +11,18 @@
 ---@field field string Airtable field name to sort by
 ---@field order 'asc'|'desc'?  Sort direction (default: 'asc')
 
+---@class AirtableResultSectionColorRule
+---@field value string Exact value to match against this section's displayed text
+---@field color string Highlight group name, or a hex color like "#FFFFFF", used when `value` matches
+
 ---@class AirtableResultSection
 ---@field field string Airtable field name to render in this section
----@field hl string? Highlight group name, or a hex color like "#FFFFFF" (a highlight group
----  is created automatically for hex colors). If omitted, defaults by position: 1st section
----  -> "TelescopeResultsIdentifier", 2nd -> "TelescopeResultsSpecialComment", others ->
----  "TelescopeResultsComment".
+---@field hl string|AirtableResultSectionColorRule[]|nil Highlight group name, a hex color
+---  like "#FFFFFF" (a highlight group is created automatically for hex colors), or a list
+---  of `{ value, color }` rules — the first rule whose `value` exactly matches this
+---  section's text wins. If omitted (or no rule matches), defaults by position: 1st
+---  section -> "TelescopeResultsIdentifier", 2nd -> "TelescopeResultsSpecialComment",
+---  others -> "TelescopeResultsComment".
 
 ---@class AirtablePrefixIcon
 ---@field icon string The icon/glyph to render
