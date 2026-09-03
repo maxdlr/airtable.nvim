@@ -201,7 +201,10 @@ local function url_under_cursor()
 	return nil
 end
 
----Opens a non-writable scratch buffer showing the record formatted as markdown.
+---Opens a non-writable scratch buffer showing the record formatted as markdown. If a
+---buffer for this record is already open (e.g. in another tab), it's closed first —
+---buffer names must be unique, and `nvim_buf_set_name` would otherwise error with
+---"buffer already exists" when reopening the same record.
 ---@param record_id string
 function M.open(record_id)
 	api.get_recordById(record_id, function(record, err)
@@ -212,6 +215,12 @@ function M.open(record_id)
 		if not record then
 			notify("No Record", string.format('no record found for id "%s"', record_id), vim.log.levels.INFO)
 			return
+		end
+
+		local buf_name = "airtable://" .. record.id
+		local existing_buf = vim.fn.bufnr(buf_name)
+		if existing_buf ~= -1 then
+			pcall(vim.api.nvim_buf_delete, existing_buf, { force = true })
 		end
 
 		local buf = vim.api.nvim_create_buf(false, true)
@@ -225,7 +234,7 @@ function M.open(record_id)
 		vim.bo[buf].buftype = "nofile"
 		vim.bo[buf].bufhidden = "wipe"
 		vim.bo[buf].swapfile = false
-		vim.api.nvim_buf_set_name(buf, "airtable://" .. record.id)
+		vim.api.nvim_buf_set_name(buf, buf_name)
 
 		vim.keymap.set("n", "<CR>", function()
 			open_context_menu(record.id)
