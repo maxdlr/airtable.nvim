@@ -45,6 +45,44 @@ local function render_lines(record)
 	return lines
 end
 
+---Opens `vim.ui.select` with the record's available actions: open in browser, browse
+---comments, or copy the record URL.
+---@param record_id string
+local function open_context_menu(record_id)
+	local items = {
+		'Open in browser',
+		'Browse comments',
+		'Copy record URL',
+	}
+
+	vim.ui.select(items, { prompt = 'Airtable record' }, function(choice)
+		if not choice then
+			return
+		end
+
+		if choice == 'Open in browser' then
+			api.record_url(record_id, function(url, err)
+				if err then
+					notify(err.category, err.message, vim.log.levels.ERROR)
+					return
+				end
+				vim.ui.open(url)
+			end)
+		elseif choice == 'Browse comments' then
+			require("airtable.comments").pick(record_id)
+		elseif choice == 'Copy record URL' then
+			api.record_url(record_id, function(url, err)
+				if err then
+					notify(err.category, err.message, vim.log.levels.ERROR)
+					return
+				end
+				vim.fn.setreg("+", url)
+				notify("Copied", "record URL copied to clipboard", vim.log.levels.INFO)
+			end)
+		end
+	end)
+end
+
 ---Opens a non-writable scratch buffer showing the record formatted as markdown.
 ---@param record_id string
 function M.open(record_id)
@@ -68,6 +106,10 @@ function M.open(record_id)
 		vim.bo[buf].bufhidden = "wipe"
 		vim.bo[buf].swapfile = false
 		vim.api.nvim_buf_set_name(buf, "airtable://" .. record.id)
+
+		vim.keymap.set("n", "<CR>", function()
+			open_context_menu(record.id)
+		end, { buffer = buf, desc = "Airtable record actions" })
 
 		vim.api.nvim_set_current_buf(buf)
 	end)

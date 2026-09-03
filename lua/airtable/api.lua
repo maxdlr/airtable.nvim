@@ -88,6 +88,20 @@ local function build_query(formula, sort, offset)
 	return query
 end
 
+---Extracts the next-page offset from a decoded Airtable response, normalizing JSON
+---`null` to Lua `nil`. `vim.json.decode` represents JSON `null` as the `vim.NIL`
+---userdata sentinel, which is truthy in a plain `if` check — using it directly as an
+---offset would send a malformed request instead of correctly stopping pagination.
+---@param decoded table
+---@return string?
+local function next_offset(decoded)
+	local offset = decoded.offset
+	if offset == nil or offset == vim.NIL then
+		return nil
+	end
+	return offset
+end
+
 ---Fetches every page of records matching `formula` (optional) from Airtable, ordered by
 ---`sort` (optional).
 ---@param formula string?
@@ -130,8 +144,9 @@ function M.list_records(formula, sort, callback)
 
 				vim.list_extend(records, decoded.records or {})
 
-				if decoded.offset then
-					fetch_page(decoded.offset)
+				local offset = next_offset(decoded)
+				if offset then
+					fetch_page(offset)
 				else
 					callback(records, nil)
 				end
@@ -200,8 +215,9 @@ function M.list_record_comments(record_id, callback)
 				-- records endpoint's `{ records: [...] }`.
 				vim.list_extend(comments, decoded.comments or {})
 
-				if decoded.offset then
-					fetch_page(decoded.offset)
+				local offset = next_offset(decoded)
+				if offset then
+					fetch_page(offset)
 				else
 					callback(comments, nil)
 				end
@@ -267,6 +283,77 @@ function M.get_recordById(record_id, callback)
 			callback(decoded, nil)
 		end),
 	})
+end
+
+-- Cache of base_id -> resolved table id, since it never changes for a given
+-- table/base pair within a session and resolving it requires an extra API call.
+local table_id_cache = {}
+
+---Resolves the configured table's id (e.g. "tblXXXXXXXXXXXXXX"), needed to build
+---Airtable web URLs (record URLs use the table id, not its display name). Looks it up
+---via the metadata API on first use and caches the result for the session.
+---@param callback fun(table_id: string?, err: AirtableError?)
+function M.get_table_id(callback)
+	local opts = config.options
+	local cached = table_id_cache[opts.base_id]
+	if cached then
+		callback(cached, nil)
+		return
+	end
+
+	local token = config.token()
+	if not token then
+		callback(nil, { category = "Missing Token", message = "no Airtable personal access token configured" })
+		return
+	end
+
+	local curl = require("plenary.curl")
+	curl.get(string.format("%s/meta/bases/%s/tables", API_URL, opts.base_id), {
+		headers = { Authorization = "Bearer " .. token },
+		raw = { "-g" },
+		callback = vim.schedule_wrap(function(response)
+			if response.status ~= 200 then
+				callback(nil, {
+					category = string.format("API Error (%d)", response.status),
+					message = response.body or "no response body",
+				})
+				return
+			end
+
+			local ok, decoded = pcall(vim.json.decode, response.body)
+			if not ok then
+				callback(nil, { category = "Response Error", message = "failed to decode Airtable response" })
+				return
+			end
+
+			for _, table_info in ipairs(decoded.tables or {}) do
+				if table_info.name == opts.table_name or table_info.id == opts.table_name then
+					table_id_cache[opts.base_id] = table_info.id
+					callback(table_info.id, nil)
+					return
+				end
+			end
+
+			callback(nil, {
+				category = "Config Error",
+				message = string.format('table "%s" not found in base "%s"', opts.table_name, opts.base_id),
+			})
+		end),
+	})
+end
+
+---Builds the Airtable web URL for a record, resolving the table id first if needed.
+---@param record_id string
+---@param callback fun(url: string?, err: AirtableError?)
+function M.record_url(record_id, callback)
+	local opts = config.options
+	M.get_table_id(function(table_id, err)
+		if err then
+			callback(nil, err)
+			return
+		end
+		callback(string.format("https://airtable.com/%s/%s/%s", opts.base_id, table_id, record_id), nil)
+	end)
 end
 
 return M
