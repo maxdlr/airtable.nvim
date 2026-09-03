@@ -121,8 +121,8 @@ or copy the record's URL.
 ### Keymaps
 
 ```lua
-vim.keymap.set('n', '<leader>jj', function() require('airtable').open() end, { desc = 'Airtable' })
-vim.keymap.set('n', '<leader>jb', function() require('airtable').open('Open bugs') end, { desc = 'Airtable: open bugs' })
+vim.keymap.set('n', '<leader>aa', function() require('airtable').open() end, { desc = 'Airtable' })
+vim.keymap.set('n', '<leader>ab', function() require('airtable').open('Open bugs') end, { desc = 'Airtable: open bugs' })
 ```
 
 ## Scope
