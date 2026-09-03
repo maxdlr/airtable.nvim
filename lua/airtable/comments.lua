@@ -3,13 +3,29 @@ local notify = require('airtable.notify').notify
 
 local M = {}
 
+---Replaces Airtable's `@[user_id]` mention tokens with a readable `@DisplayName`, using
+---the comment's own `mentioned` map (`{ [user_id] = { displayName, ... } }`). A mention
+---whose id isn't in the map (e.g. deleted collaborator) is left as-is rather than
+---breaking the text.
+---@param text string
+---@param mentioned table<string, {displayName: string?}>?
+---@return string
+local function resolve_mentions(text, mentioned)
+  if not mentioned then return text end
+  return (text:gsub('@%[([%w]+)%]', function(user_id)
+    local user = mentioned[user_id]
+    if user and user.displayName then return '@' .. user.displayName end
+    return '@[' .. user_id .. ']'
+  end))
+end
+
 ---Builds a one-line preview for a comment: author name, then the comment text with
 ---newlines flattened to spaces so it fits on a single result line.
 ---@param comment table
 ---@return string
 local function comment_preview(comment)
   local author = comment.author and comment.author.name or 'Unknown'
-  local text = (comment.text or ''):gsub('\n', ' ')
+  local text = resolve_mentions(comment.text or '', comment.mentioned):gsub('\n', ' ')
   return string.format('%s: %s', author, text)
 end
 
@@ -25,7 +41,8 @@ local function comment_lines(comment)
     table.insert(lines, created_at)
   end
   table.insert(lines, '')
-  vim.list_extend(lines, vim.split(comment.text or '', '\n', { plain = true }))
+  local text = resolve_mentions(comment.text or '', comment.mentioned)
+  vim.list_extend(lines, vim.split(text, '\n', { plain = true }))
   return lines
 end
 
