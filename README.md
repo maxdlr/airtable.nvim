@@ -3,9 +3,9 @@
 Browse, filter, and preview Airtable records from Neovim — powered by Telescope.
 
 Define one or more **pickers** (named views with their own filters, sort, and result
-layout), open them with a single command or keymap, and view full records as read-only
-markdown. Includes a live preview, comment browsing, and quick actions to open or copy a
-record's Airtable URL.
+layout), open them with a single command or keymap, and view full records as markdown.
+Includes a live preview, comment browsing, quick actions to open or copy a record's
+Airtable URL, and optional safe editing of specific fields you explicitly configure.
 
 ## Requirements
 
@@ -65,7 +65,8 @@ export AIRTABLE_TOKEN="pat_..."
 ```
 
 Generate a token at [airtable.com/create/tokens](https://airtable.com/create/tokens) with
-the `data.records:read` scope, and grant it access to your base.
+the `data.records:read` scope, and grant it access to your base. If you configure
+`buffer.editable` (see below), the token also needs `data.records:write`.
 
 ## Configuration
 
@@ -80,6 +81,12 @@ require('airtable').setup({
     fields = {                    -- arbitrary fields rendered when a record is opened
       title = 'Title',            -- "title" is special: rendered as the H1 heading
       description = 'Description',-- any other key becomes its own "## <Key>" section
+    },
+    -- Optional and off by default. Each entry adds an "Edit <field>" action to the
+    -- record view's <CR> menu. This is a WRITE operation — see "Editing fields" below.
+    editable = {
+      { field = 'Status', type = 'select' },              -- opens a picker of the field's choices
+      { field = 'Lien PR', type = 'text', name = 'Edit Lien PR' }, -- opens a small editable buffer
     },
   },
 
@@ -181,7 +188,23 @@ result_line = {
 ```
 
 Inside a record buffer, press `<CR>` for quick actions: open in browser, browse comments,
-or copy the record's URL.
+copy the record's URL, or edit a field (if `buffer.editable` is configured).
+
+### Editing fields
+
+> **This writes to Airtable.** Only fields you explicitly list in `buffer.editable` can
+> ever be edited — nothing else in this plugin modifies your data.
+
+Each `buffer.editable` entry adds an "Edit `<field>`" (or a custom `name`) action to the
+`<CR>` menu:
+
+- **`type = 'select'`** — opens a Telescope picker listing the field's valid choices
+  (fetched from Airtable). Pressing `<CR>` on a choice saves it immediately.
+- **`type = 'text'`** — opens a small centered floating buffer prefilled with the
+  field's current value. Edit it like a normal buffer, then `:w` or `:wa` to save (or
+  `:q` to discard your changes without writing).
+
+After a successful edit, the record buffer refreshes in place to show the new value.
 
 ### Keymaps
 
@@ -192,5 +215,7 @@ vim.keymap.set('n', '<leader>ab', function() require('airtable').open('Open bugs
 
 ## Scope
 
-- Read-only — this plugin does not write back to Airtable.
+- Read-only by default. The only write operation is editing a field you've explicitly
+  listed in `buffer.editable` — every other action (browsing, previewing, comments)
+  never modifies your data.
 - No local caching — every command re-fetches from the API.

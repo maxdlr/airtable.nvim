@@ -144,15 +144,38 @@ function M.apply_extmarks(buf, extmarks)
   end
 end
 
+---Rewrites `buf`'s content and extmarks from `record`, temporarily lifting the
+---non-modifiable guard. Used both for the initial render and to refresh in place after a
+---successful edit, so the buffer reflects the new value without needing to reopen it.
+---@param buf integer
+---@param record AirtableRecord
+local function refresh_buffer(buf, record)
+	local lines, extmarks = render_buffer(record)
+	vim.bo[buf].modifiable = true
+	vim.bo[buf].readonly = false
+	vim.api.nvim_buf_clear_namespace(buf, M.NAMESPACE, 0, -1)
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+	M.apply_extmarks(buf, extmarks)
+	vim.bo[buf].modifiable = false
+	vim.bo[buf].readonly = true
+end
+
 ---Opens `vim.ui.select` with the record's available actions: open in browser, browse
----comments, or copy the record URL.
+---comments, copy the record URL, or edit one of the fields configured in
+---`buffer.editable` (a **write** operation — see the config docs).
+---@param buf integer The record view buffer, refreshed in place after a successful edit
 ---@param record_id string
-local function open_context_menu(record_id)
+local function open_context_menu(buf, record_id)
+	local editable = config.options.buffer.editable or {}
+
 	local items = {
 		'Open in browser',
 		'Browse comments',
 		'Copy record URL',
 	}
+	for _, entry in ipairs(editable) do
+		table.insert(items, entry.name or ('Edit ' .. entry.field))
+	end
 
 	vim.ui.select(items, { prompt = 'Airtable record' }, function(choice)
 		if not choice then
@@ -178,6 +201,32 @@ local function open_context_menu(record_id)
 				vim.fn.setreg("+", url)
 				notify("Copied", "record URL copied to clipboard", vim.log.levels.INFO)
 			end)
+		else
+			for _, entry in ipairs(editable) do
+				local label = entry.name or ('Edit ' .. entry.field)
+				if choice == label then
+					local edit = require("airtable.edit")
+					local on_updated = function(updated_record)
+						if vim.api.nvim_buf_is_valid(buf) then
+							refresh_buffer(buf, updated_record)
+						end
+					end
+
+					if entry.type == 'select' then
+						edit.edit_select(record_id, entry.field, on_updated)
+					elseif entry.type == 'text' then
+						api.get_recordById(record_id, function(record, err)
+							if err then
+								notify(err.category, err.message, vim.log.levels.ERROR)
+								return
+							end
+							local current_value = format_field(record.fields[entry.field])
+							edit.edit_text(record_id, entry.field, current_value, on_updated)
+						end)
+					end
+					return
+				end
+			end
 		end
 	end)
 end
@@ -225,20 +274,15 @@ function M.open(record_id)
 		end
 
 		local buf = vim.api.nvim_create_buf(false, true)
-		local lines, extmarks = render_buffer(record)
-		vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-		M.apply_extmarks(buf, extmarks)
-
-		vim.bo[buf].filetype = "markdown"
-		vim.bo[buf].modifiable = false
-		vim.bo[buf].readonly = true
 		vim.bo[buf].buftype = "nofile"
 		vim.bo[buf].bufhidden = "wipe"
 		vim.bo[buf].swapfile = false
+		vim.bo[buf].filetype = "markdown"
 		vim.api.nvim_buf_set_name(buf, buf_name)
+		refresh_buffer(buf, record)
 
 		vim.keymap.set("n", "<CR>", function()
-			open_context_menu(record.id)
+			open_context_menu(buf, record.id)
 		end, { buffer = buf, desc = "Airtable record actions" })
 
 		vim.keymap.set("n", "o", function()

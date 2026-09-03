@@ -289,13 +289,16 @@ end
 -- table/base pair within a session and resolving it requires an extra API call.
 local table_id_cache = {}
 
----Resolves the configured table's id (e.g. "tblXXXXXXXXXXXXXX"), needed to build
----Airtable web URLs (record URLs use the table id, not its display name). Looks it up
----via the metadata API on first use and caches the result for the session.
----@param callback fun(table_id: string?, err: AirtableError?)
-function M.get_table_id(callback)
+-- Cache of base_id -> full table schema (fields, including select choices), fetched once
+-- per session and reused by both `get_table_id` and `get_field_choices`.
+local table_schema_cache = {}
+
+---Fetches the configured table's full schema (id, fields, field types/choices) via
+---Airtable's metadata API, caching the result for the session.
+---@param callback fun(table_info: table?, err: AirtableError?)
+local function get_table_schema(callback)
 	local opts = config.options
-	local cached = table_id_cache[opts.base_id]
+	local cached = table_schema_cache[opts.base_id]
 	if cached then
 		callback(cached, nil)
 		return
@@ -328,8 +331,9 @@ function M.get_table_id(callback)
 
 			for _, table_info in ipairs(decoded.tables or {}) do
 				if table_info.name == opts.table_name or table_info.id == opts.table_name then
+					table_schema_cache[opts.base_id] = table_info
 					table_id_cache[opts.base_id] = table_info.id
-					callback(table_info.id, nil)
+					callback(table_info, nil)
 					return
 				end
 			end
@@ -338,6 +342,109 @@ function M.get_table_id(callback)
 				category = "Config Error",
 				message = string.format('table "%s" not found in base "%s"', opts.table_name, opts.base_id),
 			})
+		end),
+	})
+end
+
+---Resolves the configured table's id (e.g. "tblXXXXXXXXXXXXXX"), needed to build
+---Airtable web URLs (record URLs use the table id, not its display name). Looks it up
+---via the metadata API on first use and caches the result for the session.
+---@param callback fun(table_id: string?, err: AirtableError?)
+function M.get_table_id(callback)
+	local opts = config.options
+	local cached = table_id_cache[opts.base_id]
+	if cached then
+		callback(cached, nil)
+		return
+	end
+
+	get_table_schema(function(table_info, err)
+		if err then
+			callback(nil, err)
+			return
+		end
+		callback(table_info.id, nil)
+	end)
+end
+
+---Fetches the list of valid choices for a `singleSelect`/`multipleSelects` field, via the
+---table's metadata (Airtable does not expose field choices any other way). Returns an
+---error if the field isn't found or isn't a select-type field.
+---@param field_name string
+---@param callback fun(choices: string[]?, err: AirtableError?)
+function M.get_field_choices(field_name, callback)
+	get_table_schema(function(table_info, err)
+		if err then
+			callback(nil, err)
+			return
+		end
+
+		for _, field in ipairs(table_info.fields or {}) do
+			if field.name == field_name then
+				local choices = field.options and field.options.choices
+				if not choices then
+					callback(nil, {
+						category = "Config Error",
+						message = string.format('field "%s" is not a select field (no choices)', field_name),
+					})
+					return
+				end
+				callback(
+					vim.tbl_map(function(choice) return choice.name end, choices),
+					nil
+				)
+				return
+			end
+		end
+
+		callback(nil, { category = "Config Error", message = string.format('field "%s" not found', field_name) })
+	end)
+end
+
+---Updates a single field on a record via Airtable's PATCH endpoint. Only the given field
+---is modified — Airtable's PATCH (as opposed to PUT) leaves every other field untouched.
+---@param record_id string
+---@param field_name string
+---@param value any The new value for `field_name` (a plain string for text/select fields)
+---@param callback fun(record: AirtableRecord?, err: AirtableError?)
+function M.update_record(record_id, field_name, value, callback)
+	local token = config.token()
+	if not token then
+		callback(nil, { category = "Missing Token", message = "no Airtable personal access token configured" })
+		return
+	end
+
+	local curl = require("plenary.curl")
+	local path = build_record_path(record_id)
+	local ok, body = pcall(vim.json.encode, { fields = { [field_name] = value } })
+	if not ok then
+		callback(nil, { category = "Request Error", message = "failed to encode request body" })
+		return
+	end
+
+	curl.patch(path, {
+		headers = {
+			Authorization = "Bearer " .. token,
+			["Content-Type"] = "application/json",
+		},
+		body = body,
+		raw = { "-g" },
+		callback = vim.schedule_wrap(function(response)
+			if response.status ~= 200 then
+				callback(nil, {
+					category = string.format("API Error (%d)", response.status),
+					message = response.body or "no response body",
+				})
+				return
+			end
+
+			local decode_ok, decoded = pcall(vim.json.decode, response.body)
+			if not decode_ok then
+				callback(nil, { category = "Response Error", message = "failed to decode Airtable response" })
+				return
+			end
+
+			callback(decoded, nil)
 		end),
 	})
 end

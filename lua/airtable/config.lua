@@ -41,10 +41,22 @@
 ---  matching no condition get no prefix. Evaluated client-side against already-fetched
 ---  data — no extra requests.
 
+---@class AirtableEditableField
+---@field field string Airtable field name (must match `buffer.fields`' value for this
+---  field to render correctly after editing) that this action edits
+---@field type 'select'|'text' 'select' opens a Telescope picker of the field's choices
+---  (fetched via Airtable's metadata API); 'text' opens a small floating scratch buffer
+---  prefilled with the current value — save with `:w`/`:wa` to write the change back.
+---@field name string? Display name for the context menu entry (default: "Edit <field>")
+
 ---@class AirtableBufferConfig
 ---@field fields table<string, string> Arbitrary named fields to render in the record buffer.
 ---  The `title` key (if present) is rendered as the H1 heading; every other key becomes its
 ---  own markdown section, titled with the key name.
+---@field editable AirtableEditableField[]? Fields that can be edited from the record view's
+---  `<CR>` context menu. This is a **write** operation against your Airtable base — only
+---  fields explicitly listed here are ever editable. Omit entirely to keep the plugin
+---  fully read-only.
 
 ---@class AirtableConfig
 ---@field token_env string Name of the environment variable holding the Airtable personal access token
@@ -196,6 +208,19 @@ function M.setup(opts)
   for _, picker in ipairs(M.options.pickers) do
     if not picker.result_line or #picker.result_line == 0 then
       notify('Config Warning', string.format('picker "%s" has no result_line configured', picker.name), vim.log.levels.WARN)
+    end
+  end
+
+  for _, editable in ipairs(M.options.buffer.editable or {}) do
+    if not editable.field or editable.field == '' then
+      notify('Config Error', 'a "buffer.editable" entry is missing "field"', vim.log.levels.ERROR)
+    end
+    if editable.type ~= 'select' and editable.type ~= 'text' then
+      notify(
+        'Config Error',
+        string.format('"buffer.editable" entry for "%s" needs type "select" or "text", got "%s"', tostring(editable.field), tostring(editable.type)),
+        vim.log.levels.ERROR
+      )
     end
   end
 end
