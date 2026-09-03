@@ -78,9 +78,10 @@ require('airtable').setup({
   page_size = 100,                -- records fetched per API page (Airtable max: 100)
 
   buffer = {
-    fields = {                    -- arbitrary fields rendered when a record is opened
-      title = 'Title',            -- "title" is special: rendered as the H1 heading
-      description = 'Description',-- any other key becomes its own "## <Key>" section
+    fields = {                     -- rendered in this exact order when a record is opened
+      { key = 'title', field = 'Title' },             -- key="title" is special: the H1 heading
+      { key = 'status', field = 'Status' },            -- other keys become their own "## <Key>" section
+      { key = 'description', field = 'Description' },
     },
     -- Optional and off by default. Each entry adds an "Edit <field>" action to the
     -- record view's <CR> menu. This is a WRITE operation — see "Editing fields" below.

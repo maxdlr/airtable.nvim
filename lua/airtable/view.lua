@@ -41,8 +41,8 @@ local function pill_line_chunks(heading, text)
 end
 
 ---Builds the markdown lines + extmark specs for a record from `buffer.fields`. The
----`title` key (if configured) becomes the H1 heading; every other key becomes its own
----section, styled by `airtable.style.classify(key)`:
+---`title`-keyed entry (if configured) becomes the H1 heading; every other entry becomes
+---its own section, in the order given in config, styled by `airtable.style.classify(key)`:
 ---  - 'heading': rendered like a sub-heading, bold/emphasized text, no border/pill.
 ---  - 'pill': the key label plus the value rendered as a colored pill/bubble.
 ---  - 'plain': a left-border bar character on each line of the body text.
@@ -58,7 +58,14 @@ local function render_buffer(record, opts)
   opts = opts or {}
   local exclude = opts.exclude or {}
   local fields = config.options.buffer.fields
-  local title = fields.title and format_field(record.fields[fields.title]) or ""
+
+  local title = ""
+  for _, entry in ipairs(fields) do
+    if entry.key == "title" then
+      title = format_field(record.fields[entry.field])
+      break
+    end
+  end
   if title == "" then
     title = "(untitled)"
   end
@@ -66,19 +73,13 @@ local function render_buffer(record, opts)
   local lines = { "# " .. title, "" }
   local extmarks = {}
 
-  -- pairs() iteration order isn't guaranteed for string keys; sort alphabetically so
-  -- section order is stable across runs. (If explicit ordering matters, this can be
-  -- revisited to use an ordered list instead of a plain table for `fields`.)
-  local other_keys = {}
-  for key in pairs(fields) do
-    if key ~= "title" and not exclude[key] then
-      table.insert(other_keys, key)
+  for _, entry in ipairs(fields) do
+    local key = entry.key
+    local field_name = entry.field
+    if key == "title" or exclude[key] then
+      goto continue
     end
-  end
-  table.sort(other_keys)
 
-  for _, key in ipairs(other_keys) do
-    local field_name = fields[key]
     local raw_value = record.fields[field_name]
     if raw_value == nil and opts.skip_missing then
       goto continue

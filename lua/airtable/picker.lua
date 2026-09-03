@@ -129,9 +129,9 @@ local function buffer_keys_shown_in_result_line(result_line)
 	end
 
 	local exclude = {}
-	for key, field_name in pairs(config.options.buffer.fields) do
-		if shown_field_names[field_name] then
-			exclude[key] = true
+	for _, entry in ipairs(config.options.buffer.fields) do
+		if shown_field_names[entry.field] then
+			exclude[entry.key] = true
 		end
 	end
 	return exclude

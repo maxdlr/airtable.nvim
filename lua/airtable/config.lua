@@ -42,17 +42,24 @@
 ---  data — no extra requests.
 
 ---@class AirtableEditableField
----@field field string Airtable field name (must match `buffer.fields`' value for this
----  field to render correctly after editing) that this action edits
+---@field field string Airtable field name (must match one of `buffer.fields`' `field`
+---  values for this field to render correctly after editing) that this action edits
 ---@field type 'select'|'text' 'select' opens a Telescope picker of the field's choices
----  (fetched via Airtable's metadata API); 'text' opens a small floating scratch buffer
----  prefilled with the current value — save with `:w`/`:wa` to write the change back.
+---  (fetched via Airtable's metadata API); 'text' opens a floating scratch buffer
+---  prefilled with the current value — save with `<C-CR>`.
 ---@field name string? Display name for the context menu entry (default: "Edit <field>")
 
+---@class AirtableBufferField
+---@field key string Canonical name driving default styling (see `airtable.style.classify`)
+---  — e.g. "title", "status", "assignee". `key = "title"` is special: rendered as the H1
+---  heading instead of its own section, regardless of position in the list.
+---@field field string Airtable field name to read this section's value from
+
 ---@class AirtableBufferConfig
----@field fields table<string, string> Arbitrary named fields to render in the record buffer.
----  The `title` key (if present) is rendered as the H1 heading; every other key becomes its
----  own markdown section, titled with the key name.
+---@field fields AirtableBufferField[] Ordered list of `{ key, field }` entries rendered
+---  when a record is opened, in the given order (except `key = "title"`, always the H1
+---  heading). `key` drives default styling by name pattern; `field` is the Airtable
+---  column name.
 ---@field editable AirtableEditableField[]? Fields that can be edited from the record view's
 ---  `<CR>` context menu. This is a **write** operation against your Airtable base — only
 ---  fields explicitly listed here are ever editable. Omit entirely to keep the plugin
@@ -78,8 +85,8 @@ local defaults = {
   table_name = '',
   buffer = {
     fields = {
-      title = 'Title',
-      description = 'Description',
+      { key = 'title', field = 'Title' },
+      { key = 'description', field = 'Description' },
     },
   },
   pickers = {
@@ -208,6 +215,15 @@ function M.setup(opts)
   for _, picker in ipairs(M.options.pickers) do
     if not picker.result_line or #picker.result_line == 0 then
       notify('Config Warning', string.format('picker "%s" has no result_line configured', picker.name), vim.log.levels.WARN)
+    end
+  end
+
+  for _, buffer_field in ipairs(M.options.buffer.fields or {}) do
+    if not buffer_field.key or buffer_field.key == '' then
+      notify('Config Error', 'a "buffer.fields" entry is missing "key"', vim.log.levels.ERROR)
+    end
+    if not buffer_field.field or buffer_field.field == '' then
+      notify('Config Error', string.format('"buffer.fields" entry "%s" is missing "field"', tostring(buffer_field.key)), vim.log.levels.ERROR)
     end
   end
 
