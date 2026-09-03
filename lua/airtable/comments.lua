@@ -13,6 +13,42 @@ local function comment_preview(comment)
   return string.format('%s: %s', author, text)
 end
 
+---Builds the full markdown lines for a comment's preview: author + timestamp as a
+---heading, followed by the complete (unflattened) comment text.
+---@param comment table
+---@return string[]
+local function comment_lines(comment)
+  local author = comment.author and comment.author.name or 'Unknown'
+  local created_at = comment.createdTime or ''
+  local lines = { string.format('# %s', author) }
+  if created_at ~= '' then
+    table.insert(lines, created_at)
+  end
+  table.insert(lines, '')
+  vim.list_extend(lines, vim.split(comment.text or '', '\n', { plain = true }))
+  return lines
+end
+
+---Builds the Telescope previewer for the comments picker, showing the full (unflattened)
+---comment text — the result line only shows a single-line, flattened preview.
+---@return table
+local function make_previewer()
+  local previewers = require 'telescope.previewers'
+  return previewers.new_buffer_previewer {
+    title = 'Comment',
+    define_preview = function(self, entry)
+      local lines = comment_lines(entry.value)
+      vim.bo[self.state.bufnr].modifiable = true
+      vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, lines)
+      vim.bo[self.state.bufnr].filetype = 'markdown'
+      -- Not modifiable/buftype nofile: this is a read-only preview, and linters/LSP that
+      -- guard on `vim.bo.modifiable` should skip it rather than lint a scratch buffer.
+      vim.bo[self.state.bufnr].modifiable = false
+      vim.bo[self.state.bufnr].buftype = 'nofile'
+    end,
+  }
+end
+
 ---Opens a Telescope picker listing `record_id`'s comments. Airtable's API does not expose
 ---a per-comment permalink, so selecting a comment copies the record's URL instead (the
 ---record's comments panel is visible from there) and closes the picker.
@@ -48,6 +84,7 @@ function M.pick(record_id)
           end,
         },
         sorter = conf.generic_sorter {},
+        previewer = make_previewer(),
         attach_mappings = function(prompt_bufnr, map)
           actions.select_default:replace(function()
             actions.close(prompt_bufnr)
