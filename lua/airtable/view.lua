@@ -23,21 +23,23 @@ local LEFT_BORDER_HL = "Comment"
 ---@param text string
 ---@return { [1]: string, [2]: string }[]
 local function pill_line_chunks(heading, text)
-  -- An empty/absent value isn't really a "status" to badge — render it as a plain,
-  -- dim label instead of wrapping the "_Empty._" placeholder in a colored pill.
-  if text == "_Empty._" then
-    return { { heading .. ': ', 'Title' }, { text, 'Comment' } }
-  end
+	-- An empty/absent value isn't really a "status" to badge — render it as a plain,
+	-- dim label instead of wrapping the "_Empty._" placeholder in a colored pill.
+	if text == "_Empty._" then
+		return { { heading .. ": ", "Title" }, { text, "Comment" } }
+	end
 
-  local ok, chunks = pcall(function()
-    local hex = colors.color_for_value(text)
-    local pill_chunks = bubble.make_bubble(text, hex)
-    local result = { { heading .. ' ', 'Title' } }
-    vim.list_extend(result, pill_chunks)
-    return result
-  end)
-  if ok then return chunks end
-  return { { heading .. ': ' .. text, 'Normal' } }
+	local ok, chunks = pcall(function()
+		local hex = colors.color_for_value(text)
+		local pill_chunks = bubble.make_bubble(text, hex)
+		local result = { { heading .. " ", "Title" } }
+		vim.list_extend(result, pill_chunks)
+		return result
+	end)
+	if ok then
+		return chunks
+	end
+	return { { heading .. ": " .. text, "Normal" } }
 end
 
 ---Builds the markdown lines + extmark specs for a record from `buffer.fields`. The
@@ -55,82 +57,82 @@ end
 ---@return string[] lines
 ---@return { line: integer, col: integer, opts: table }[] extmarks
 local function render_buffer(record, opts)
-  opts = opts or {}
-  local exclude = opts.exclude or {}
-  local fields = config.options.buffer.fields
+	opts = opts or {}
+	local exclude = opts.exclude or {}
+	local fields = config.options.buffer.fields
 
-  local title = ""
-  for _, entry in ipairs(fields) do
-    if entry.key == "title" then
-      title = format_field(record.fields[entry.field])
-      break
-    end
-  end
-  if title == "" then
-    title = "(untitled)"
-  end
+	local title = ""
+	for _, entry in ipairs(fields) do
+		if entry.key == "title" then
+			title = format_field(record.fields[entry.field])
+			break
+		end
+	end
+	if title == "" then
+		title = "(untitled)"
+	end
 
-  local lines = { "# " .. title, "" }
-  local extmarks = {}
+	local lines = { "# " .. title, "" }
+	local extmarks = {}
 
-  for _, entry in ipairs(fields) do
-    local key = entry.key
-    local field_name = entry.field
-    if key == "title" or exclude[key] then
-      goto continue
-    end
+	for _, entry in ipairs(fields) do
+		local key = entry.key
+		local field_name = entry.field
+		if key == "title" or exclude[key] then
+			goto continue
+		end
 
-    local raw_value = record.fields[field_name]
-    if raw_value == nil and opts.skip_missing then
-      goto continue
-    end
+		local raw_value = record.fields[field_name]
+		if raw_value == nil and opts.skip_missing then
+			goto continue
+		end
 
-    local text = format_field(raw_value)
-    if text == "" then
-      text = "_Empty._"
-    end
-    local heading = key:sub(1, 1):upper() .. key:sub(2)
-    local section_style = style.classify(key)
+		local text = format_field(raw_value)
+		if text == "" then
+			text = "_Empty._"
+		end
+		local heading = key:sub(1, 1):upper() .. key:sub(2)
+		local section_style = style.classify(key)
 
-    if section_style == "pill" then
-      table.insert(lines, "")
-      local line_idx = #lines -- 0-based index of the line about to be appended below
-      table.insert(lines, "")
-      table.insert(extmarks, {
-        line = line_idx,
-        col = 0,
-        opts = { virt_text = pill_line_chunks(heading, text), virt_text_pos = "overlay" },
-      })
-      table.insert(lines, "")
-    elseif section_style == "heading" then
-      table.insert(lines, "")
-      table.insert(lines, heading .. ": " .. text)
-      table.insert(extmarks, {
-        line = #lines - 1,
-        col = 0,
-        opts = { hl_group = "Title", end_col = #(heading .. ": " .. text) },
-      })
-      table.insert(lines, "")
-    else
-      vim.list_extend(lines, { "## " .. heading, "" })
-      for _, body_line in ipairs(vim.split(text, "\n", { plain = true })) do
-        table.insert(lines, body_line)
-        table.insert(extmarks, {
-          line = #lines - 1,
-          col = 0,
-          opts = {
-            virt_text = { { LEFT_BORDER, LEFT_BORDER_HL } },
-            virt_text_pos = "inline",
-          },
-        })
-      end
-      table.insert(lines, "")
-    end
+		if section_style == "pill" then
+			table.insert(lines, "")
+			local line_idx = #lines -- 0-based index of the line about to be appended below
+			table.insert(lines, "")
+			table.insert(extmarks, {
+				line = line_idx,
+				col = 0,
+				opts = { virt_text = pill_line_chunks(heading, text), virt_text_pos = "overlay" },
+			})
+			table.insert(lines, "")
+		elseif section_style == "heading" then
+			table.insert(lines, "")
+			table.insert(lines, heading .. ": " .. text)
+			table.insert(extmarks, {
+				line = #lines - 1,
+				col = 0,
+				opts = { hl_group = "Title", end_col = #(heading .. ": " .. text) },
+			})
+			table.insert(lines, "")
+		else
+			vim.list_extend(lines, { "## " .. heading, "" })
+			for _, body_line in ipairs(vim.split(text, "\n", { plain = true })) do
+				table.insert(lines, body_line)
+				table.insert(extmarks, {
+					line = #lines - 1,
+					col = 0,
+					opts = {
+						virt_text = { { LEFT_BORDER, LEFT_BORDER_HL } },
+						virt_text_pos = "inline",
+					},
+				})
+			end
+			table.insert(lines, "")
+		end
 
-    ::continue::
-  end
+		::continue::
+	end
 
-  return lines, extmarks
+	return lines, extmarks
 end
 M.render_buffer = render_buffer
 
@@ -140,9 +142,9 @@ M.render_buffer = render_buffer
 ---@param buf integer
 ---@param extmarks { line: integer, col: integer, opts: table }[]
 function M.apply_extmarks(buf, extmarks)
-  for _, mark in ipairs(extmarks) do
-    pcall(vim.api.nvim_buf_set_extmark, buf, M.NAMESPACE, mark.line, mark.col, mark.opts)
-  end
+	for _, mark in ipairs(extmarks) do
+		pcall(vim.api.nvim_buf_set_extmark, buf, M.NAMESPACE, mark.line, mark.col, mark.opts)
+	end
 end
 
 ---Rewrites `buf`'s content and extmarks from `record`, temporarily lifting the
@@ -170,20 +172,22 @@ local function open_context_menu(buf, record_id)
 	local editable = config.options.buffer.editable or {}
 
 	local items = {
-		'Open in browser',
-		'Browse comments',
-		'Copy record URL',
+		"Open in browser",
+		"Browse comments",
+		"Copy record URL",
+		"---------------",
 	}
+
 	for _, entry in ipairs(editable) do
-		table.insert(items, entry.name or ('Edit ' .. entry.field))
+		table.insert(items, entry.name or ("Edit " .. entry.field))
 	end
 
-	vim.ui.select(items, { prompt = 'Airtable record' }, function(choice)
+	vim.ui.select(items, { prompt = "Airtable record" }, function(choice)
 		if not choice then
 			return
 		end
 
-		if choice == 'Open in browser' then
+		if choice == "Open in browser" then
 			api.record_url(record_id, function(url, err)
 				if err then
 					notify(err.category, err.message, vim.log.levels.ERROR)
@@ -191,9 +195,9 @@ local function open_context_menu(buf, record_id)
 				end
 				vim.ui.open(url)
 			end)
-		elseif choice == 'Browse comments' then
+		elseif choice == "Browse comments" then
 			require("airtable.comments").pick(record_id)
-		elseif choice == 'Copy record URL' then
+		elseif choice == "Copy record URL" then
 			api.record_url(record_id, function(url, err)
 				if err then
 					notify(err.category, err.message, vim.log.levels.ERROR)
@@ -204,7 +208,7 @@ local function open_context_menu(buf, record_id)
 			end)
 		else
 			for _, entry in ipairs(editable) do
-				local label = entry.name or ('Edit ' .. entry.field)
+				local label = entry.name or ("Edit " .. entry.field)
 				if choice == label then
 					local edit = require("airtable.edit")
 					local on_updated = function(updated_record)
@@ -213,9 +217,9 @@ local function open_context_menu(buf, record_id)
 						end
 					end
 
-					if entry.type == 'select' then
+					if entry.type == "select" then
 						edit.edit_select(record_id, entry.field, on_updated)
-					elseif entry.type == 'text' then
+					elseif entry.type == "text" then
 						api.get_recordById(record_id, function(record, err)
 							if err then
 								notify(err.category, err.message, vim.log.levels.ERROR)
@@ -247,7 +251,9 @@ local function url_under_cursor()
 		end
 		return nil
 	end)
-	if ok then return result end
+	if ok then
+		return result
+	end
 	return nil
 end
 
