@@ -163,31 +163,37 @@ local function refresh_buffer(buf, record)
 	vim.bo[buf].readonly = true
 end
 
----Opens `vim.ui.select` with the record's available actions: open in browser, browse
+-- Sentinel marking a context-menu entry as a non-selectable separator (mirrors the
+-- pattern many Telescope-based command pickers use for grouping items visually).
+local MENU_SEPARATOR = false
+
+---Opens a Telescope dropdown with the record's available actions: open in browser, browse
 ---comments, copy the record URL, or edit one of the fields configured in
----`buffer.editable` (a **write** operation — see the config docs).
+---`buffer.editable` (a **write** operation — see the config docs). Built as a direct
+---Telescope picker (rather than `vim.ui.select`) so the separator between built-in and
+---edit actions renders consistently (dimmed, full-width, unselectable) regardless of
+---what `vim.ui.select` backend, if any, the user has configured.
 ---@param buf integer The record view buffer, refreshed in place after a successful edit
 ---@param record_id string
 local function open_context_menu(buf, record_id)
 	local editable = config.options.buffer.editable or {}
 
-	local items = {
-		"Open in browser",
-		"Browse comments",
-		"Copy record URL",
-		"---------------",
+	---@type { [1]: string, [2]: string|function|false }[]
+	local menu_items = {
+		{ "Open in browser", "open_in_browser" },
+		{ "Browse comments", "browse_comments" },
+		{ "Copy record URL", "copy_url" },
 	}
 
-	for _, entry in ipairs(editable) do
-		table.insert(items, entry.name or ("Edit " .. entry.field))
+	if #editable > 0 then
+		table.insert(menu_items, { "───────────────", MENU_SEPARATOR })
+		for _, entry in ipairs(editable) do
+			table.insert(menu_items, { entry.name or ("Edit " .. entry.field), entry })
+		end
 	end
 
-	vim.ui.select(items, { prompt = "Airtable record" }, function(choice)
-		if not choice then
-			return
-		end
-
-		if choice == "Open in browser" then
+	local function run_action(action)
+		if action == "open_in_browser" then
 			api.record_url(record_id, function(url, err)
 				if err then
 					notify(err.category, err.message, vim.log.levels.ERROR)
@@ -195,9 +201,9 @@ local function open_context_menu(buf, record_id)
 				end
 				vim.ui.open(url)
 			end)
-		elseif choice == "Browse comments" then
+		elseif action == "browse_comments" then
 			require("airtable.comments").pick(record_id)
-		elseif choice == "Copy record URL" then
+		elseif action == "copy_url" then
 			api.record_url(record_id, function(url, err)
 				if err then
 					notify(err.category, err.message, vim.log.levels.ERROR)
@@ -206,34 +212,97 @@ local function open_context_menu(buf, record_id)
 				vim.fn.setreg("+", url)
 				notify("Copied", "record URL copied to clipboard", vim.log.levels.INFO)
 			end)
-		else
-			for _, entry in ipairs(editable) do
-				local label = entry.name or ("Edit " .. entry.field)
-				if choice == label then
-					local edit = require("airtable.edit")
-					local on_updated = function(updated_record)
-						if vim.api.nvim_buf_is_valid(buf) then
-							refresh_buffer(buf, updated_record)
-						end
-					end
-
-					if entry.type == "select" then
-						edit.edit_select(record_id, entry.field, on_updated)
-					elseif entry.type == "text" then
-						api.get_recordById(record_id, function(record, err)
-							if err then
-								notify(err.category, err.message, vim.log.levels.ERROR)
-								return
-							end
-							local current_value = format_field(record.fields[entry.field])
-							edit.edit_text(record_id, entry.field, current_value, on_updated)
-						end)
-					end
-					return
+		elseif type(action) == "table" then
+			local entry = action
+			local edit = require("airtable.edit")
+			local on_updated = function(updated_record)
+				if vim.api.nvim_buf_is_valid(buf) then
+					refresh_buffer(buf, updated_record)
 				end
 			end
+
+			if entry.type == "select" then
+				edit.edit_select(record_id, entry.field, on_updated)
+			elseif entry.type == "text" then
+				api.get_recordById(record_id, function(record, err)
+					if err then
+						notify(err.category, err.message, vim.log.levels.ERROR)
+						return
+					end
+					local current_value = format_field(record.fields[entry.field])
+					edit.edit_text(record_id, entry.field, current_value, on_updated)
+				end)
+			end
 		end
-	end)
+	end
+
+	local pickers = require("telescope.pickers")
+	local finders = require("telescope.finders")
+	local actions = require("telescope.actions")
+	local action_state = require("telescope.actions.state")
+	local themes = require("telescope.themes")
+	local telescope_config = require("telescope.config")
+
+	pickers
+		.new(
+			themes.get_dropdown({
+				winblend = 5,
+				layout_config = {
+					prompt_position = "top",
+					width = function(_, max_columns, _) return math.max(40, math.floor(max_columns * 0.25)) end,
+					height = #menu_items + 4,
+				},
+			}),
+			{
+				prompt_title = "Airtable record",
+				finder = finders.new_table({
+					results = menu_items,
+					entry_maker = function(item)
+						local is_separator = item[2] == MENU_SEPARATOR
+						return {
+							value = item,
+							-- Empty ordinal keeps the separator from matching search input, so
+							-- typing never accidentally "selects" a divider via fuzzy match.
+							ordinal = is_separator and "" or item[1],
+							display = function(entry)
+								local hl = is_separator and "Comment" or "Normal"
+								return entry.value[1], { { { 0, #entry.value[1] }, hl } }
+							end,
+						}
+					end,
+				}),
+				sorter = telescope_config.values.generic_sorter({}),
+				attach_mappings = function(prompt_bufnr, map)
+					-- Skip over separator rows when moving the selection, so they can never
+					-- be landed on (and therefore never look "selectable").
+					local function skip_separators(move)
+						return function()
+							move(prompt_bufnr)
+							local guard = 0
+							while action_state.get_selected_entry().value[2] == MENU_SEPARATOR and guard < #menu_items do
+								move(prompt_bufnr)
+								guard = guard + 1
+							end
+						end
+					end
+					map({ "i", "n" }, "<Down>", skip_separators(actions.move_selection_next))
+					map({ "i", "n" }, "<C-n>", skip_separators(actions.move_selection_next))
+					map({ "i", "n" }, "<Up>", skip_separators(actions.move_selection_previous))
+					map({ "i", "n" }, "<C-p>", skip_separators(actions.move_selection_previous))
+
+					actions.select_default:replace(function()
+						local selection = action_state.get_selected_entry()
+						local action = selection.value[2]
+						-- Separators are inert: ignore the selection and keep the picker open.
+						if action == MENU_SEPARATOR then return end
+						actions.close(prompt_bufnr)
+						run_action(action)
+					end)
+					return true
+				end,
+			}
+		)
+		:find()
 end
 
 ---Finds the URL under the cursor on the current line, if any. Scans the line for
