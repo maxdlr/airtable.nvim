@@ -1,6 +1,7 @@
 local config = require("airtable.config")
 local view = require("airtable.view")
-local format_field = require("airtable.api").format_field
+local api = require("airtable.api")
+local format_field = api.format_field
 
 local M = {}
 
@@ -154,6 +155,9 @@ local function make_display(record, picker)
 
 	for i, section in ipairs(picker.result_line) do
 		local text = format_field(record.fields[section.field])
+		if section.date_format and text ~= "" then
+			text = api.format_date(text, section.date_format)
+		end
 		if text == "" then
 			text = "—"
 		end

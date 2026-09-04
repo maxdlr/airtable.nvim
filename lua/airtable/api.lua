@@ -44,6 +44,29 @@ function M.format_field(value)
 	return tostring(value)
 end
 
+---Reformats an Airtable ISO-8601 timestamp (e.g. "2026-09-03T21:09:34.000Z") for display.
+---Returns `text` unchanged if it doesn't match the expected timestamp shape, so a
+---misconfigured `date_format` on a non-date field never breaks the render.
+---@param text string Already-formatted field text (see `format_field`)
+---@param mode 'datetime'|'date'|'time'
+---@return string
+function M.format_date(text, mode)
+	local year, month, day, hour, minute = text:match("^(%d%d%d%d)-(%d%d)-(%d%d)T(%d%d):(%d%d)")
+	if not year then
+		return text
+	end
+
+	local date_part = string.format("%s/%s/%s", day, month, year)
+	local time_part = string.format("%s:%s", hour, minute)
+
+	if mode == "date" then
+		return date_part
+	elseif mode == "time" then
+		return time_part
+	end
+	return string.format("%s - %s", date_part, time_part)
+end
+
 ---Percent-encodes a URL path segment (RFC 3986: keep alphanumerics and `-._~`, escape
 ---everything else as uppercase %XX). Used for the table name, since it can contain
 ---spaces/emoji/non-ASCII characters and is a path segment rather than a query value

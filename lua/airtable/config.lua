@@ -23,6 +23,8 @@
 ---  section's text wins. If omitted (or no rule matches), defaults by position: 1st
 ---  section -> "TelescopeResultsIdentifier", 2nd -> "TelescopeResultsSpecialComment",
 ---  others -> "TelescopeResultsComment".
+---@field date_format 'datetime'|'date'|'time'|nil Same as `AirtableBufferField.date_format`
+---  — reformats an Airtable ISO-8601 timestamp for display in this result-line section.
 
 ---@class AirtablePrefixIcon
 ---@field icon string The icon/glyph to render
@@ -54,6 +56,10 @@
 ---  — e.g. "title", "status", "assignee". `key = "title"` is special: rendered as the H1
 ---  heading instead of its own section, regardless of position in the list.
 ---@field field string Airtable field name to read this section's value from
+---@field date_format 'datetime'|'date'|'time'|nil When set, the field's value is parsed as
+---  an Airtable ISO-8601 timestamp (e.g. "2026-09-03T21:09:34.000Z") and reformatted:
+---  'datetime' -> "03/09/2026 - 21:09", 'date' -> "03/09/2026", 'time' -> "21:09". A value
+---  that isn't a valid ISO timestamp is left as-is rather than breaking the render.
 
 ---@class AirtableBufferConfig
 ---@field fields AirtableBufferField[] Ordered list of `{ key, field }` entries rendered
@@ -224,6 +230,13 @@ function M.setup(opts)
     end
     if not buffer_field.field or buffer_field.field == '' then
       notify('Config Error', string.format('"buffer.fields" entry "%s" is missing "field"', tostring(buffer_field.key)), vim.log.levels.ERROR)
+    end
+    if buffer_field.date_format and not vim.tbl_contains({ 'datetime', 'date', 'time' }, buffer_field.date_format) then
+      notify(
+        'Config Error',
+        string.format('"buffer.fields" entry "%s" has invalid date_format "%s" (expected "datetime", "date", or "time")', tostring(buffer_field.key), tostring(buffer_field.date_format)),
+        vim.log.levels.ERROR
+      )
     end
   end
 

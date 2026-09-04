@@ -65,6 +65,9 @@ local function render_buffer(record, opts)
 	for _, entry in ipairs(fields) do
 		if entry.key == "title" then
 			title = format_field(record.fields[entry.field])
+			if entry.date_format then
+				title = api.format_date(title, entry.date_format)
+			end
 			break
 		end
 	end
@@ -88,6 +91,9 @@ local function render_buffer(record, opts)
 		end
 
 		local text = format_field(raw_value)
+		if entry.date_format and text ~= "" then
+			text = api.format_date(text, entry.date_format)
+		end
 		if text == "" then
 			text = "_Empty._"
 		end

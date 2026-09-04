@@ -179,6 +179,35 @@ result_line = {
 },
 ```
 
+#### `date_format`: reformatting Airtable timestamps
+
+Airtable date fields come back as ISO-8601 (e.g. `"2026-09-03T21:09:34.000Z"`). Add
+`date_format` to a `buffer.fields` or `result_line` entry to reformat it — set
+independently per context, e.g. the full record view shows the full timestamp while the
+picker row only shows the date:
+
+```lua
+buffer = {
+  fields = {
+    { key = 'title', field = 'Title' },
+    { key = 'created_at', field = 'Created At', date_format = 'datetime' }, -- "03/09/2026 - 21:09"
+  },
+},
+pickers = {
+  {
+    name = 'Tickets',
+    result_line = {
+      { field = 'Title' },
+      { field = 'Created At', date_format = 'date' }, -- "03/09/2026" only, in the picker row
+    },
+  },
+},
+```
+
+`date_format` accepts `'datetime'` (`"03/09/2026 - 21:09"`), `'date'` (`"03/09/2026"`), or
+`'time'` (`"21:09"`). A value that isn't a valid ISO timestamp is left unchanged rather
+than breaking the render.
+
 </details>
 
 ## Usage
