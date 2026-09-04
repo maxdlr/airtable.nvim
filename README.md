@@ -84,7 +84,7 @@ require('airtable').setup({
   base_id = 'appXXXXXXXXXXXXXX',  -- your Airtable base id
   table_name = 'Tickets',         -- exact table name (or its "tbl..." id) in that base
 
-buffer = {
+  buffer = {
     fields = {                     -- rendered in this exact order when a record is opened
       { key = 'title', field = 'Title' },             -- key="title" is special: the H1 heading
       { key = 'description', field = 'Description' },
