@@ -116,7 +116,9 @@ local function make_sorter()
 	sorter.scoring_function = function(self, prompt, ordinal, entry, ...)
 		if prompt:sub(1, #DEEP_SEARCH_PREFIX) == DEEP_SEARCH_PREFIX then
 			local query = vim.trim(prompt:sub(#DEEP_SEARCH_PREFIX + 1))
-			if query == "" then return 1 end -- prefix alone with no query yet: show everything
+			if query == "" then
+				return 1
+			end -- prefix alone with no query yet: show everything
 
 			entry._deep_search_text = entry._deep_search_text or deep_search_text(entry.value)
 			if entry._deep_search_text:find(query:lower(), 1, true) then
@@ -164,7 +166,7 @@ local function make_display(record, picker)
 	end
 
 	local displayer = entry_display.create({
-		separator = " │ ",
+		separator = " • ",
 		items = items,
 	})
 
