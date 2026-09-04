@@ -1,6 +1,6 @@
 # airtable.nvim
 
-Browse, filter, and preview Airtable records from Neovim — powered by Telescope.
+Browse, filter, and preview Airtable records from Neovim.
 
 Define one or more **pickers** (named views with their own filters, sort, and result
 layout), open them with a single command or keymap, and view full records as markdown.
@@ -56,12 +56,12 @@ use({
 
 ## Authentication
 
-Your Airtable personal access token is **never** stored in config — it's read from an
+Your Airtable personal access token is **never** stored in config, it's read from an
 environment variable at runtime.
 
 ```bash
 # ~/.zshrc, ~/.bashrc, etc. — never commit this value.
-export AIRTABLE_TOKEN="pat_..."
+export AIRTABLE_TOKEN="pat..."
 ```
 
 Generate a token at [airtable.com/create/tokens](https://airtable.com/create/tokens) with
