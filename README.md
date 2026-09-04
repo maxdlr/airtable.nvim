@@ -108,10 +108,10 @@ require('airtable').setup({
 </details>
 
 ### Minimum config (to test out)
-If you're in a dev company team, there might hundreds of records you don't need to see to focus on your work.
+If you're in a dev company team, there might hundreds of records you don't need to see to focus on your work.  
 
-All Airtable fields are custom, most of the time, so don't forget to rename them to match their exact names.
-If you skip `pickers` entirely, `:Airtable` lists every record in `table_name`.
+All Airtable fields are custom, most of the time, **so don't forget to rename them to match their exact names.**  
+If you skip `pickers` entirely, `:Airtable` lists **every** record in `table_name`.
 
 ```lua
 require('airtable').setup({
