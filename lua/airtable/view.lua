@@ -10,21 +10,15 @@ local M = {}
 
 M.NAMESPACE = vim.api.nvim_create_namespace("airtable_view")
 
--- Left-border bar character used to decorate "plain" sections, echoing the vertical
--- border seen in tools like octo.nvim/gitsigns. A plain buffer-text character (not a
--- sign/statuscolumn), so it works identically in a real buffer and in Telescope's
--- previewer without touching window-local options.
+-- Plain buffer character (not a sign/statuscolumn) so it renders the same in a real
+-- buffer and in Telescope's previewer.
 local LEFT_BORDER = "▌"
 local LEFT_BORDER_HL = "Comment"
 
----Builds one pill line's `virt_text` overlay chunks (heading label + colored pill),
----falling back to plain text if anything goes wrong.
 ---@param heading string
 ---@param text string
 ---@return { [1]: string, [2]: string }[]
 local function pill_line_chunks(heading, text)
-	-- An empty/absent value isn't really a "status" to badge — render it as a plain,
-	-- dim label instead of wrapping the "_Empty._" placeholder in a colored pill.
 	if text == "_Empty._" then
 		return { { heading .. ": ", "Title" }, { text, "Comment" } }
 	end
@@ -42,18 +36,12 @@ local function pill_line_chunks(heading, text)
 	return { { heading .. ": " .. text, "Normal" } }
 end
 
----Builds the markdown lines + extmark specs for a record from `buffer.fields`. The
----`title`-keyed entry (if configured) becomes the H1 heading; every other entry becomes
----its own section, in the order given in config, styled by `airtable.style.classify(key)`:
----  - 'heading': rendered like a sub-heading, bold/emphasized text, no border/pill.
----  - 'pill': the key label plus the value rendered as a colored pill/bubble.
----  - 'plain': a left-border bar character on each line of the body text.
+-- Builds markdown lines + extmark specs for a record from buffer.fields, in config
+-- order (the "title" key becomes the H1 heading regardless of position).
+-- opts.exclude: keys to omit (already shown elsewhere, e.g. a picker's result_line).
+-- opts.skip_missing: omit absent fields instead of rendering "_Empty._" (for previews
+-- built from list data, where absence just means "not fetched").
 ---@param record AirtableRecord
----@param opts { exclude: table<string, boolean>?, skip_missing: boolean? }? `exclude`:
----  set of `buffer.fields` keys to omit entirely (e.g. fields already shown in a picker's
----  `result_line`). `skip_missing`: when true, a field absent from `record.fields` is
----  omitted instead of rendered as "_Empty._" — used for previews built from list data,
----  where a field's absence just means it wasn't fetched, not that it's actually empty.
 ---@return string[] lines
 ---@return { line: integer, col: integer, opts: table }[] extmarks
 local function render_buffer(record, opts)
@@ -92,9 +80,7 @@ local function render_buffer(record, opts)
 
 		local text = format_field(raw_value)
 		if text ~= "" then
-			-- Explicit `date_format` always wins; otherwise, auto-detect an ISO-8601
-			-- timestamp and default to the full "datetime" format in the record buffer
-			-- (the picker's result_line defaults to "date" instead — see picker.lua).
+			-- explicit date_format wins; else auto-detect ISO-8601, default to full datetime here
 			local mode = entry.date_format or (api.looks_like_date(text) and "datetime" or nil)
 			if mode then
 				text = api.format_date(text, mode)
@@ -108,7 +94,7 @@ local function render_buffer(record, opts)
 
 		if section_style == "pill" then
 			table.insert(lines, "")
-			local line_idx = #lines -- 0-based index of the line about to be appended below
+			local line_idx = #lines
 			table.insert(lines, "")
 			table.insert(extmarks, {
 				line = line_idx,
@@ -148,22 +134,13 @@ local function render_buffer(record, opts)
 end
 M.render_buffer = render_buffer
 
----Applies a list of extmark specs (as returned by `render_buffer`) to `buf`. Each
----extmark's placement is individually pcall-guarded so one bad spec (e.g. an out-of-range
----line after unrelated edits) can't take down the rest of the render.
----@param buf integer
----@param extmarks { line: integer, col: integer, opts: table }[]
+-- Each extmark is individually pcall-guarded so one bad spec can't break the rest.
 function M.apply_extmarks(buf, extmarks)
 	for _, mark in ipairs(extmarks) do
 		pcall(vim.api.nvim_buf_set_extmark, buf, M.NAMESPACE, mark.line, mark.col, mark.opts)
 	end
 end
 
----Rewrites `buf`'s content and extmarks from `record`, temporarily lifting the
----non-modifiable guard. Used both for the initial render and to refresh in place after a
----successful edit, so the buffer reflects the new value without needing to reopen it.
----@param buf integer
----@param record AirtableRecord
 local function refresh_buffer(buf, record)
 	local lines, extmarks = render_buffer(record)
 	vim.bo[buf].modifiable = true
@@ -175,17 +152,12 @@ local function refresh_buffer(buf, record)
 	vim.bo[buf].readonly = true
 end
 
--- Sentinel marking a context-menu entry as a non-selectable separator (mirrors the
--- pattern many Telescope-based command pickers use for grouping items visually).
 local MENU_SEPARATOR = false
 
----Opens a Telescope dropdown with the record's available actions: open in browser, browse
----comments, copy the record URL, or edit one of the fields configured in
----`buffer.editable` (a **write** operation — see the config docs). Built as a direct
----Telescope picker (rather than `vim.ui.select`) so the separator between built-in and
----edit actions renders consistently (dimmed, full-width, unselectable) regardless of
----what `vim.ui.select` backend, if any, the user has configured.
----@param buf integer The record view buffer, refreshed in place after a successful edit
+-- Built as a real Telescope picker (not vim.ui.select) so the separator between
+-- built-in and edit actions renders consistently (dimmed, unselectable) regardless of
+-- the user's vim.ui.select backend.
+---@param buf integer
 ---@param record_id string
 local function open_context_menu(buf, record_id)
 	local editable = config.options.buffer.editable or {}
@@ -273,8 +245,7 @@ local function open_context_menu(buf, record_id)
 						local is_separator = item[2] == MENU_SEPARATOR
 						return {
 							value = item,
-							-- Empty ordinal keeps the separator from matching search input, so
-							-- typing never accidentally "selects" a divider via fuzzy match.
+							-- empty ordinal: separator never matches search input
 							ordinal = is_separator and "" or item[1],
 							display = function(entry)
 								local hl = is_separator and "Comment" or "Normal"
@@ -285,8 +256,7 @@ local function open_context_menu(buf, record_id)
 				}),
 				sorter = telescope_config.values.generic_sorter({}),
 				attach_mappings = function(prompt_bufnr, map)
-					-- Skip over separator rows when moving the selection, so they can never
-					-- be landed on (and therefore never look "selectable").
+					-- Skip separator rows when moving the selection so they can't be landed on.
 					local function skip_separators(move)
 						return function()
 							move(prompt_bufnr)
@@ -305,7 +275,6 @@ local function open_context_menu(buf, record_id)
 					actions.select_default:replace(function()
 						local selection = action_state.get_selected_entry()
 						local action = selection.value[2]
-						-- Separators are inert: ignore the selection and keep the picker open.
 						if action == MENU_SEPARATOR then return end
 						actions.close(prompt_bufnr)
 						run_action(action)
@@ -317,13 +286,11 @@ local function open_context_menu(buf, record_id)
 		:find()
 end
 
----Finds the URL under the cursor on the current line, if any. Scans the line for
----`http(s)://`-prefixed spans and returns the one containing the cursor column.
 ---@return string?
 local function url_under_cursor()
 	local ok, result = pcall(function()
 		local line = vim.api.nvim_get_current_line()
-		local cursor_col = vim.api.nvim_win_get_cursor(0)[2] -- 0-based byte column
+		local cursor_col = vim.api.nvim_win_get_cursor(0)[2]
 		for start_col, url in line:gmatch("()(https?://[^%s%)%]>\"']+)") do
 			local end_col = start_col + #url - 1
 			if cursor_col >= start_col - 1 and cursor_col <= end_col - 1 then
@@ -338,10 +305,8 @@ local function url_under_cursor()
 	return nil
 end
 
----Opens a non-writable scratch buffer showing the record formatted as markdown. If a
----buffer for this record is already open (e.g. in another tab), it's closed first —
----buffer names must be unique, and `nvim_buf_set_name` would otherwise error with
----"buffer already exists" when reopening the same record.
+-- Closes any existing buffer for this record first, since nvim_buf_set_name errors
+-- with "buffer already exists" when reopening the same record.
 ---@param record_id string
 function M.open(record_id)
 	notify("Loading", "fetching record...", vim.log.levels.INFO)

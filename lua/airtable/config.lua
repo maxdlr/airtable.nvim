@@ -1,93 +1,63 @@
 ---@class AirtableFilterCondition
----@field field string Airtable field name to match
----@field value string|string[] Value `field` must equal/contain. A list means "any of these" (OR).
----@field only boolean? By default, conditions match array-shaped fields too (linked records,
----  multi-select, collaborators) using `FIND(value, ARRAYJOIN(field)) > 0`, since that also
----  works correctly for plain text/number/single-select fields. Set `only = true` to force
----  an exact `field = value` comparison instead — needed if `value` could be a substring of
----  another value in the same field (e.g. matching 'Bug' when 'Bug report' also exists).
+---@field field string
+---@field value string|string[] "any of these" (OR) if a list
+---@field only boolean? Exact match instead of the default contains/FIND match
 
 ---@class AirtableSort
----@field field string Airtable field name to sort by
----@field order 'asc'|'desc'?  Sort direction (default: 'asc')
+---@field field string
+---@field order 'asc'|'desc'?
 
 ---@class AirtableResultSectionColorRule
----@field value string Exact value to match against this section's displayed text
----@field color string Highlight group name, or a hex color like "#FFFFFF", used when `value` matches
+---@field value string
+---@field color string
 
 ---@class AirtableResultSection
----@field field string Airtable field name to render in this section
----@field hl string|AirtableResultSectionColorRule[]|nil Highlight group name, a hex color
----  like "#FFFFFF" (a highlight group is created automatically for hex colors), or a list
----  of `{ value, color }` rules — the first rule whose `value` exactly matches this
----  section's text wins. If omitted (or no rule matches), defaults by position: 1st
----  section -> "TelescopeResultsIdentifier", 2nd -> "TelescopeResultsSpecialComment",
----  others -> "TelescopeResultsComment".
----@field date_format 'datetime'|'date'|'time'|nil Same as `AirtableBufferField.date_format`
----  — reformats an Airtable ISO-8601 timestamp for display in this result-line section.
+---@field field string
+---@field hl string|AirtableResultSectionColorRule[]|nil Group name, hex color, or
+---  per-value color rules. Defaults by position if omitted.
+---@field date_format 'datetime'|'date'|'time'|nil
 
 ---@class AirtablePrefixIcon
----@field icon string The icon/glyph to render
----@field color string? Highlight group name, or a hex color like "#FFFFFF" (a highlight
----  group is created automatically for hex colors). Defaults to no special coloring.
+---@field icon string
+---@field color string?
 
 ---@class AirtablePicker
----@field name string Display name shown in the picker/command completion
----@field filters AirtableFilterCondition[]? Conditions combined with AND. Omit to list all records.
----@field sort AirtableSort? How to order results (translated to Airtable's `sort[]` API param)
----@field result_line AirtableResultSection[] Ordered sections shown in this picker's result line
+---@field name string
+---@field filters AirtableFilterCondition[]? AND-ed. Omit to list all records.
+---@field sort AirtableSort?
+---@field result_line AirtableResultSection[]
 ---@field result_line_prefix {[1]: string|AirtablePrefixIcon, [2]: AirtableFilterCondition}[]?
----  Advanced/optional: an ordered list of `{ icon, condition }` pairs. `icon` is either a
----  plain string, or a `{ icon = ..., color = ... }` table to color it. For each record, the
----  first condition that matches has its icon prepended to the result line; records
----  matching no condition get no prefix. Evaluated client-side against already-fetched
----  data — no extra requests.
+---  First matching condition's icon is prepended to the result line.
 
 ---@class AirtableEditableField
----@field field string Airtable field name (must match one of `buffer.fields`' `field`
----  values for this field to render correctly after editing) that this action edits
----@field type 'select'|'text' 'select' opens a Telescope picker of the field's choices
----  (fetched via Airtable's metadata API); 'text' opens a floating scratch buffer
----  prefilled with the current value — save with `<C-CR>`.
----@field name string? Display name for the context menu entry (default: "Edit <field>")
+---@field field string Must match a `buffer.fields` entry's `field`
+---@field type 'select'|'text'
+---@field name string? Menu label (default: "Edit <field>")
 
 ---@class AirtableBufferField
----@field key string Canonical name driving default styling (see `airtable.style.classify`)
----  — e.g. "title", "status", "assignee". `key = "title"` is special: rendered as the H1
----  heading instead of its own section, regardless of position in the list.
----@field field string Airtable field name to read this section's value from
----@field date_format 'datetime'|'date'|'time'|nil When set, the field's value is parsed as
----  an Airtable ISO-8601 timestamp (e.g. "2026-09-03T21:09:34.000Z") and reformatted:
----  'datetime' -> "03/09/2026 - 21:09", 'date' -> "03/09/2026", 'time' -> "21:09". A value
----  that isn't a valid ISO timestamp is left as-is rather than breaking the render.
+---@field key string Drives default styling (see `airtable.style.classify`).
+---  `"title"` is special: rendered as the H1 heading.
+---@field field string
+---@field date_format 'datetime'|'date'|'time'|nil
 
 ---@class AirtableBufferConfig
----@field fields AirtableBufferField[] Ordered list of `{ key, field }` entries rendered
----  when a record is opened, in the given order (except `key = "title"`, always the H1
----  heading). `key` drives default styling by name pattern; `field` is the Airtable
----  column name.
----@field editable AirtableEditableField[]? Fields that can be edited from the record view's
----  `<CR>` context menu. This is a **write** operation against your Airtable base — only
----  fields explicitly listed here are ever editable. Omit entirely to keep the plugin
----  fully read-only.
+---@field fields AirtableBufferField[] Rendered in this order (except `title`)
+---@field editable AirtableEditableField[]? Write operation — only these fields are editable
 
 ---@class AirtableDateFormats
----@field datetime string? Template for `date_format = 'datetime'`. Placeholders: `{DD}`,
----  `{MM}`, `{YYYY}`, `{HH}`, `{mm}`. Default: `"{DD}/{MM}/{YYYY} - {HH}:{mm}"`.
----@field date string? Template for `date_format = 'date'`. Default: `"{DD}/{MM}/{YYYY}"`.
----@field time string? Template for `date_format = 'time'`. Default: `"{HH}:{mm}"`.
+---@field datetime string? Placeholders: {DD} {MM} {YYYY} {HH} {mm}
+---@field date string?
+---@field time string?
 
 ---@class AirtableConfig
----@field token_env string Name of the environment variable holding the Airtable personal access token
----@field base_id string Airtable base id (e.g. "appXXXXXXXXXXXXXX")
----@field table_name string Airtable table name or table id
+---@field token_env string Env var name holding the Airtable token
+---@field base_id string
+---@field table_name string
 ---@field buffer AirtableBufferConfig
 ---@field pickers AirtablePicker[]
----@field default_filter string Name of the picker (from `pickers`) opened when none is passed to `open()`
----@field page_size integer Airtable page size (max 100)
----@field date_formats AirtableDateFormats? Advanced/optional: overrides the display
----  template for each `date_format` mode, applied everywhere a `date_format` is used
----  (explicitly, or auto-detected — see `AirtableBufferField.date_format`).
+---@field default_filter string Picker opened by `open()` with no argument
+---@field page_size integer
+---@field date_formats AirtableDateFormats?
 
 local M = {}
 
@@ -118,21 +88,12 @@ local defaults = {
 ---@type AirtableConfig
 M.options = vim.deepcopy(defaults)
 
----Escapes single quotes for use inside an Airtable formula string literal.
----@param value string
----@return string
 local function escape_formula_string(value)
 	return (value:gsub("'", "\\'"))
 end
 
----Builds a single `field OP value` comparison. By default uses `FIND(value,
----ARRAYJOIN(field)) > 0`, which works for both array-shaped fields (linked records,
----multi-select, collaborators) and plain text/number/single-select fields. Pass
----`only = true` for an exact `field = value` comparison instead.
----@param field string
----@param value string
----@param only boolean?
----@return string
+-- Default: FIND/ARRAYJOIN so this works on both plain and array-shaped fields.
+-- only=true: exact `=` match instead.
 local function single_match_formula(field, value, only)
 	local escaped = escape_formula_string(tostring(value))
 	if only then
@@ -141,10 +102,6 @@ local function single_match_formula(field, value, only)
 	return string.format("FIND('%s', ARRAYJOIN({%s})) > 0", escaped, field)
 end
 
----Builds the formula fragment for one condition. A list `value` becomes an `OR` of
----matches on that field; a plain string/number becomes a single match.
----@param condition AirtableFilterCondition
----@return string
 local function condition_formula(condition)
 	if type(condition.value) == "table" then
 		local alternatives = vim.tbl_map(function(v)
@@ -155,10 +112,6 @@ local function condition_formula(condition)
 	return single_match_formula(condition.field, condition.value, condition.only)
 end
 
----Builds a picker's full `filterByFormula` expression by AND-ing all its conditions.
----Returns nil (matches all records) when the picker has no filters.
----@param picker AirtablePicker
----@return string?
 local function build_formula(picker)
 	if not picker.filters or #picker.filters == 0 then
 		return nil
@@ -170,15 +123,8 @@ local function build_formula(picker)
 	return string.format("AND(%s)", table.concat(parts, ", "))
 end
 
----Checks whether a single value matches a condition's expected value, mirroring the
----server-side formula semantics: substring match by default, exact match when `only` is
----set. Comparison is done on the plain-text form of the record's raw field value, via the
----same formatter used for display (`airtable.api.format_field`), so array-shaped fields
----(collaborators, linked records, multi-select) are handled the same way here as server-side.
----@param actual_text string
----@param expected string
----@param only boolean?
----@return boolean
+-- Mirrors condition_formula's semantics so client-side matching (result_line_prefix)
+-- behaves the same as the server-side formula.
 local function value_matches(actual_text, expected, only)
 	expected = tostring(expected)
 	if only then
@@ -187,13 +133,6 @@ local function value_matches(actual_text, expected, only)
 	return actual_text:find(expected, 1, true) ~= nil
 end
 
----Checks whether `record` matches a filter condition, client-side. Used by
----`result_line_prefix` to pick an icon without an extra API round-trip. Mirrors
----`condition_formula`'s semantics (contains-by-default, `only` for exact, list `value`
----for OR) so a condition behaves the same whether sent to Airtable or evaluated locally.
----@param record AirtableRecord
----@param condition AirtableFilterCondition
----@return boolean
 function M.matches_condition(record, condition)
 	local format_field = require("airtable.api").format_field
 	local actual_text = format_field(record.fields[condition.field])
@@ -209,14 +148,6 @@ function M.matches_condition(record, condition)
 	return value_matches(actual_text, condition.value, condition.only)
 end
 
----Resolves a picker's `result_line_prefix` icon spec for `record`: the icon of the first
----condition that matches (a plain string, or a `{ icon, color }` table — see
----`AirtablePrefixIcon`), or "" if none match or `result_line_prefix` is unset. Returned
----as-is/unresolved; rendering (e.g. turning `color` into a highlight group) is the
----caller's responsibility.
----@param record AirtableRecord
----@param picker AirtablePicker
----@return string|AirtablePrefixIcon
 function M.resolve_prefix_icon(record, picker)
 	if not picker.result_line_prefix then
 		return ""
@@ -230,8 +161,6 @@ function M.resolve_prefix_icon(record, picker)
 	return ""
 end
 
----Merges user options into the plugin defaults and validates required fields.
----@param opts AirtableConfig?
 function M.setup(opts)
 	opts = opts or {}
 	M.options = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts)
@@ -320,9 +249,6 @@ function M.setup(opts)
 	end
 end
 
----Returns the configured picker matching `name` (with `formula` resolved from its
----`filters`), or the default picker if `name` is nil. Returns nil (and notifies) if
----no picker matches.
 ---@param name string?
 ---@return (AirtablePicker & { formula: string? })?
 function M.get_picker(name)
@@ -336,15 +262,12 @@ function M.get_picker(name)
 	return nil
 end
 
----@return string[]
 function M.picker_names()
 	return vim.tbl_map(function(p)
 		return p.name
 	end, M.options.pickers)
 end
 
----Reads the Airtable personal access token from the configured environment variable.
----@return string?
 function M.token()
 	local value = os.getenv(M.options.token_env)
 	if not value or value == "" then

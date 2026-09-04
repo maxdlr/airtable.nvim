@@ -3,11 +3,6 @@ local notify = require('airtable.notify').notify
 
 local M = {}
 
----Opens a Telescope picker listing `field`'s valid choices (fetched from Airtable's
----metadata). Selecting one with `<CR>` PATCHes the record and calls `on_updated(record)`.
----@param record_id string
----@param field string Airtable field name
----@param on_updated fun(record: AirtableRecord)
 function M.edit_select(record_id, field, on_updated)
   api.get_field_choices(field, function(choices, err)
     if err then
@@ -52,15 +47,9 @@ function M.edit_select(record_id, field, on_updated)
   end)
 end
 
----Opens a small centered floating scratch buffer prefilled with `current_value`. The
----buffer is a plain scratch buffer (`buftype=nofile`, not `acwrite`) — deliberately not
----wired to `:w`/`:wa`/`BufWriteCmd`, so tools like auto-save.nvim (which react to
----`InsertLeave`/`TextChanged`/`BufLeave`) can't trigger a premature save while the user is
----still editing. `<C-CR>` is the only way to save; `:q` discards the changes.
----@param record_id string
----@param field string Airtable field name
----@param current_value string
----@param on_updated fun(record: AirtableRecord)
+-- buftype=nofile (not acwrite): deliberately not wired to :w/:wa/BufWriteCmd, so
+-- auto-save plugins reacting to InsertLeave/TextChanged/BufLeave can't trigger a
+-- premature save. <C-CR> is the only way to save; :q discards changes.
 function M.edit_text(record_id, field, current_value, on_updated)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(current_value, '\n', { plain = true }))

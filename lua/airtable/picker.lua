@@ -8,29 +8,21 @@ local M = {}
 local entry_display = require("telescope.pickers.entry_display")
 local previewers = require("telescope.previewers")
 
----Default highlight groups by section position, used when a `result_line` entry omits
----`hl`: 1st section stands out as the identifier, 2nd as a secondary comment, everything
----after that as a plain comment.
+-- Default hl by section position when a result_line entry omits `hl`.
 local DEFAULT_HL_BY_POSITION = {
 	"TelescopeResultsIdentifier",
 	"TelescopeResultsSpecialComment",
 }
 local DEFAULT_HL_FALLBACK = "TelescopeResultsComment"
 
----Cache of hex color -> generated highlight group name, so repeated colors (or repeated
----picker invocations) don't keep redefining the same highlight group.
+-- hex color -> generated highlight group name, so repeated colors don't redefine the group.
 local hex_hl_cache = {}
 
----Resolves a `result_line` section's `hl` to a highlight group name. `hl` accepts:
----  - nil: falls back to a sensible default based on the section's position (see
----    `DEFAULT_HL_BY_POSITION`).
----  - a highlight group name or hex color like "#FFFFFF", used unconditionally.
----  - a list of `{ value = ..., color = ... }` rules: the first rule whose `value`
----    matches `text` exactly wins; if none match, falls back to the position-based
----    default (same as `hl == nil`).
+-- hl accepts: nil (position-based default), a group name/hex color, or a list of
+-- { value, color } rules (first exact match on `text` wins, else the default).
 ---@param hl string|{value: string, color: string}[]|nil
----@param position integer 1-based index of this section within its result_line
----@param text string? The section's actual displayed text, needed to evaluate conditional rules
+---@param position integer
+---@param text string?
 ---@return string
 local function resolve_hl(hl, position, text)
 	if hl == nil then
@@ -61,11 +53,7 @@ local function resolve_hl(hl, position, text)
 	return group
 end
 
----Builds the plain-text ordinal string (used for fuzzy matching) from all `result_line`
----sections, so search isn't limited to just the first section.
----@param record AirtableRecord
----@param result_line AirtableResultSection[]
----@return string
+-- Ordinal for fuzzy matching, built from all result_line sections (not just the first).
 local function ordinal_text(record, result_line)
 	local parts = {}
 	for _, section in ipairs(result_line) do
@@ -77,17 +65,11 @@ local function ordinal_text(record, result_line)
 	return table.concat(parts, " ")
 end
 
--- Prefix that switches the picker from "fuzzy match the visible row" to "substring
--- search across every configured `buffer.fields` value" (title, description, and any
--- other field — not just what's shown in the result line). Chosen to look like a
--- deliberate flag/marker rather than something a real query would start with.
+-- Prefix that switches from "fuzzy match the visible row" to "substring search across
+-- every buffer.fields value" (description, notes, etc).
 local DEEP_SEARCH_PREFIX = "--"
 
----Concatenates every `buffer.fields` value for `record` into one lowercased blob, used
----for deep/full-content search. Built once per record (cached on the entry) rather than
----per keystroke, since the underlying field values never change during a picker session.
----@param record AirtableRecord
----@return string
+-- Cached per-record (on the entry) since field values don't change during a session.
 local function deep_search_text(record)
 	local parts = {}
 	for _, entry in ipairs(config.options.buffer.fields) do
@@ -99,16 +81,11 @@ local function deep_search_text(record)
 	return table.concat(parts, " "):lower()
 end
 
----Builds a sorter that fuzzy-matches the visible row by default, or does a plain
----substring search across every `buffer.fields` value when the prompt starts with
----`DEEP_SEARCH_PREFIX` (e.g. typing "--feature-flag-xyz" searches descriptions/notes/etc,
----not just what's shown in the result line) — entirely local, no extra API calls.
----
----Patches the *actual* configured sorter's `scoring_function` in place, rather than
----wrapping it in a new `Sorter` object — some sorters (notably telescope-fzf-native) are
----stateful and rely on `init`/`start`/`destroy` lifecycle hooks being called by Telescope
----on the exact same object it manages; delegating to a nested sorter instance skips that
----lifecycle and crashes (e.g. fzf-native's internal `slab` never gets allocated).
+-- Patches the *actual* configured sorter's scoring_function in place rather than
+-- wrapping it in a new Sorter object: stateful sorters (e.g. telescope-fzf-native) rely
+-- on init/start/destroy lifecycle hooks being called by Telescope on the exact object it
+-- manages — delegating to a nested instance skips that and crashes (fzf-native's `slab`
+-- never gets allocated).
 ---@return table sorter
 local function make_sorter()
 	local sorter = require("telescope.config").values.generic_sorter({})
@@ -119,13 +96,13 @@ local function make_sorter()
 			local query = vim.trim(prompt:sub(#DEEP_SEARCH_PREFIX + 1))
 			if query == "" then
 				return 1
-			end -- prefix alone with no query yet: show everything
+			end
 
 			entry._deep_search_text = entry._deep_search_text or deep_search_text(entry.value)
 			if entry._deep_search_text:find(query:lower(), 1, true) then
-				return 1 -- any positive score keeps the entry; exact ranking doesn't matter here
+				return 1
 			end
-			return -1 -- negative score filters the entry out
+			return -1
 		end
 
 		return original_scoring_function(self, prompt, ordinal, entry, ...)
@@ -134,10 +111,8 @@ local function make_sorter()
 	return sorter
 end
 
----Builds the segmented `display` function for a record entry: an optional leading icon
----resolved from `picker.result_line_prefix` (advanced/optional, see config docs), followed
----by one section per `result_line` entry, separated by " │ ". Missing fields render as "—".
----All sections but the last auto-size to their content; the last fills remaining width.
+-- Leading icon (from result_line_prefix) + one section per result_line entry, separated
+-- by " │ ". Missing fields render as "—"; last section fills remaining width.
 ---@param record AirtableRecord
 ---@param picker AirtablePicker
 ---@return function
@@ -156,9 +131,7 @@ local function make_display(record, picker)
 	for i, section in ipairs(picker.result_line) do
 		local text = format_field(record.fields[section.field])
 		if text ~= "" then
-			-- Explicit `date_format` always wins; otherwise, auto-detect an ISO-8601
-			-- timestamp and default to "date" (date-only) in the picker row — the full
-			-- record buffer defaults to "datetime" instead (see view.lua).
+			-- explicit date_format wins; else auto-detect, default to date-only in picker rows
 			local mode = section.date_format or (api.looks_like_date(text) and "date" or nil)
 			if mode then
 				text = api.format_date(text, mode)
@@ -185,10 +158,7 @@ local function make_display(record, picker)
 	end
 end
 
----Builds the set of `buffer.fields` keys whose Airtable field name is already shown in
----`result_line`, so the preview doesn't repeat what's already visible in the result row.
----@param result_line AirtableResultSection[]
----@return table<string, boolean>
+-- buffer.fields keys already shown in result_line, so the preview doesn't repeat them.
 local function buffer_keys_shown_in_result_line(result_line)
 	local shown_field_names = {}
 	for _, section in ipairs(result_line) do
@@ -204,12 +174,8 @@ local function buffer_keys_shown_in_result_line(result_line)
 	return exclude
 end
 
----Builds a previewer that renders a record's `buffer.fields` (minus whatever `result_line`
----already shows) as markdown, using only the data already fetched by the picker — no
----extra request per preview. Fields absent from the record (e.g. not present on this
----particular record) are silently omitted rather than shown as empty.
----@param result_line AirtableResultSection[]
----@return table
+-- Renders buffer.fields (minus what result_line already shows) using data already
+-- fetched by the picker — no extra request per preview.
 local function make_previewer(result_line)
 	local exclude = buffer_keys_shown_in_result_line(result_line)
 
@@ -219,24 +185,16 @@ local function make_previewer(result_line)
 			local lines, extmarks = view.render_buffer(entry.value, { exclude = exclude, skip_missing = true })
 			vim.bo[self.state.bufnr].modifiable = true
 			vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, lines)
-			-- Clear any extmarks from a previous preview render before applying the new ones
-			-- (the previewer buffer is reused across selections, not recreated each time).
+			-- previewer buffer is reused across selections, not recreated each time
 			vim.api.nvim_buf_clear_namespace(self.state.bufnr, view.NAMESPACE, 0, -1)
 			view.apply_extmarks(self.state.bufnr, extmarks)
 			vim.bo[self.state.bufnr].filetype = "markdown"
-			-- Not modifiable/buftype nofile: this is a read-only preview of already-fetched
-			-- data, and linters/LSP that guard on `vim.bo.modifiable` (as this config's own
-			-- nvim-lint autocmd does) should skip it rather than lint a scratch buffer.
 			vim.bo[self.state.bufnr].modifiable = false
 			vim.bo[self.state.bufnr].buftype = "nofile"
 		end,
 	})
 end
 
----Builds the Telescope finder for a list of records, matching `picker`'s display config.
----@param records AirtableRecord[]
----@param picker AirtablePicker
----@return table finder
 local function make_finder(records, picker)
 	local finders = require("telescope.finders")
 	return finders.new_table({
@@ -251,10 +209,9 @@ local function make_finder(records, picker)
 	})
 end
 
----Opens a Telescope picker for `picker` immediately (with a "Loading…" prompt title and no
----results yet), then calls `fetch_records(callback)` to fetch the actual data and refreshes
----the picker in place once it arrives — so the UI shows up right away instead of the whole
----command appearing to hang while the network request is in flight.
+-- Opens the picker immediately with a "Loading…" title and no results, then refreshes
+-- it in place once fetch_records's callback fires — avoids the command appearing to
+-- hang while the network request is in flight.
 ---@param picker AirtablePicker
 ---@param fetch_records fun(callback: fun(records: AirtableRecord[]?, err: AirtableError?))
 function M.pick(picker, fetch_records)
@@ -285,8 +242,6 @@ function M.pick(picker, fetch_records)
 
 	fetch_records(function(records, err)
 		if err then
-			-- Nothing to browse: close the (empty) picker and surface the error instead of
-			-- leaving a permanently-loading, unusable prompt open.
 			pcall(actions.close, current_picker.prompt_bufnr)
 			notify(err.category, err.message, vim.log.levels.ERROR)
 			return

@@ -10,16 +10,11 @@ local API_URL = "https://api.airtable.com/v0"
 ---@field fields table<string, any>
 
 ---@class AirtableError
----@field category string Short category shown in the toast title, e.g. "API Error"
+---@field category string
 ---@field message string
 
----Formats a raw Airtable field value for display as plain text. Airtable represents
----some field types beyond plain strings/numbers:
----  - linked records / multi-select: array of strings or record ids
----  - collaborators: array of `{ id, email, name }` objects (or a single one)
----Both are flattened to a comma-separated string of their readable parts.
----@param value any
----@return string
+-- Flattens linked records/multi-select (array) and collaborators ({id,email,name} or
+-- an array of those) to plain comma-separated text.
 function M.format_field(value)
 	if value == nil then
 		return ""
@@ -30,7 +25,7 @@ function M.format_field(value)
 	if type(value) == "table" then
 		if value.name then
 			return tostring(value.name)
-		end -- single collaborator object
+		end
 		local parts = {}
 		for _, item in ipairs(value) do
 			if type(item) == "table" then
@@ -44,32 +39,19 @@ function M.format_field(value)
 	return tostring(value)
 end
 
----Default templates for each `date_format` mode. Placeholders: `{DD}` day, `{MM}` month,
----`{YYYY}` year, `{HH}` hour (24h), `{mm}` minute. Overridable via the advanced
----`date_formats` setup option — see `airtable.config`.
+-- Placeholders: {DD} {MM} {YYYY} {HH} {mm}. Overridable via config.date_formats.
 local DEFAULT_DATE_TEMPLATES = {
 	datetime = "{DD}/{MM}/{YYYY} - {HH}:{mm}",
 	date = "{DD}/{MM}/{YYYY}",
 	time = "{HH}:{mm}",
 }
 
----Checks whether `text` looks like an Airtable ISO-8601 timestamp
----(e.g. "2026-09-03T21:09:34.000Z"), without actually reformatting it. Used to
----auto-detect date-like fields that have no explicit `date_format` configured.
----@param text string
----@return boolean
 function M.looks_like_date(text)
 	return text:match("^%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d") ~= nil
 end
 
----Reformats an Airtable ISO-8601 timestamp (e.g. "2026-09-03T21:09:34.000Z") for display,
----using the template configured for `mode` (see `airtable.config`'s `date_formats`
----option), falling back to `DEFAULT_DATE_TEMPLATES` if none is configured. Returns `text`
----unchanged if it doesn't match the expected timestamp shape, so a misconfigured
----`date_format` on a non-date field never breaks the render.
----@param text string Already-formatted field text (see `format_field`)
+-- Non-matching text is returned unchanged rather than erroring.
 ---@param mode 'datetime'|'date'|'time'
----@return string
 function M.format_date(text, mode)
 	local year, month, day, hour, minute = text:match("^(%d%d%d%d)-(%d%d)-(%d%d)T(%d%d):(%d%d)")
 	if not year then
@@ -88,34 +70,19 @@ function M.format_date(text, mode)
 	}))
 end
 
----Percent-encodes a URL path segment (RFC 3986: keep alphanumerics and `-._~`, escape
----everything else as uppercase %XX). Used for the table name, since it can contain
----spaces/emoji/non-ASCII characters and is a path segment rather than a query value
----(`plenary.curl`'s `query` table option only encodes query values, not the path).
----@param segment string
----@return string
+-- RFC 3986 percent-encoding for path segments (table name can contain
+-- spaces/emoji/non-ASCII; plenary.curl's `query` option only encodes query values).
 local function encode_path_segment(segment)
 	return (segment:gsub("([^%w%-%.%_%~])", function(c)
 		return string.format("%%%02X", c:byte())
 	end))
 end
 
----Builds the request path (base + table, URL-escaped) for listing records. Query
----parameters (filter, sort, pagination) are passed separately as a table so
----`plenary.curl` can percent-encode them correctly — hand-building a query string with
----`vim.uri_encode` mishandles reserved characters like `{`, `}`, `[`, `]` used in Airtable
----formulas and `sort[0][field]`-style parameter names.
----@return string
 local function build_table_path()
 	local opts = config.options
 	return string.format("%s/%s/%s", API_URL, opts.base_id, encode_path_segment(opts.table_name))
 end
 
----Builds the query parameter table for one page of a list-records request.
----@param formula string?
----@param sort AirtableSort?
----@param offset string?
----@return table<string, string>
 local function build_query(formula, sort, offset)
 	local opts = config.options
 	local query = { pageSize = tostring(opts.page_size) }
@@ -132,12 +99,7 @@ local function build_query(formula, sort, offset)
 	return query
 end
 
----Extracts the next-page offset from a decoded Airtable response, normalizing JSON
----`null` to Lua `nil`. `vim.json.decode` represents JSON `null` as the `vim.NIL`
----userdata sentinel, which is truthy in a plain `if` check — using it directly as an
----offset would send a malformed request instead of correctly stopping pagination.
----@param decoded table
----@return string?
+-- vim.json.decode turns JSON null into vim.NIL (truthy in `if`), not Lua nil.
 local function next_offset(decoded)
 	local offset = decoded.offset
 	if offset == nil or offset == vim.NIL then
@@ -146,11 +108,6 @@ local function next_offset(decoded)
 	return offset
 end
 
----Fetches every page of records matching `formula` (optional) from Airtable, ordered by
----`sort` (optional).
----@param formula string?
----@param sort AirtableSort?
----@param callback fun(records: AirtableRecord[]?, err: AirtableError?)
 function M.list_records(formula, sort, callback)
 	local token = config.token()
 	if not token then
@@ -162,14 +119,11 @@ function M.list_records(formula, sort, callback)
 	local records = {}
 	local path = build_table_path()
 
-	---@param offset string?
 	local function fetch_page(offset)
 		curl.get(path, {
 			query = build_query(formula, sort, offset),
 			headers = { Authorization = "Bearer " .. token },
-			-- Disable curl's URL globbing ("-g"): without it, curl interprets literal
-			-- "[" / "]" in `sort[0][field]`-style query keys as its own range/glob syntax
-			-- and fails with "bad range in URL" instead of sending the request.
+			-- "-g": disable curl's URL globbing, or "[" / "]" in sort[0][field] breaks the request.
 			raw = { "-g" },
 			callback = vim.schedule_wrap(function(response)
 				if response.status ~= 200 then
@@ -201,9 +155,6 @@ function M.list_records(formula, sort, callback)
 	fetch_page(nil)
 end
 
----Builds the request path (base + table + record, URL-escaped) for a record's comments.
----@param record_id string
----@return string
 local function build_record_comments_path(record_id)
 	local opts = config.options
 	return string.format(
@@ -216,10 +167,7 @@ local function build_record_comments_path(record_id)
 	)
 end
 
----Fetches every page of comments on a specific record. Airtable's comments endpoint does
----not support a `sort` parameter (it 422s if one is sent), unlike the records endpoint.
----@param record_id string
----@param callback fun(comments: table[]?, err: AirtableError?)
+-- Airtable's comments endpoint 422s on a `sort` param, unlike the records endpoint.
 function M.list_record_comments(record_id, callback)
 	local token = config.token()
 	if not token then
@@ -231,14 +179,10 @@ function M.list_record_comments(record_id, callback)
 	local comments = {}
 	local path = build_record_comments_path(record_id)
 
-	---@param offset string?
 	local function fetch_page(offset)
 		curl.get(path, {
 			query = build_query(nil, nil, offset),
 			headers = { Authorization = "Bearer " .. token },
-			-- Disable curl's URL globbing ("-g"): without it, curl interprets literal
-			-- "[" / "]" in query keys as its own range/glob syntax and fails with
-			-- "bad range in URL" instead of sending the request.
 			raw = { "-g" },
 			callback = vim.schedule_wrap(function(response)
 				if response.status ~= 200 then
@@ -255,8 +199,7 @@ function M.list_record_comments(record_id, callback)
 					return
 				end
 
-				-- Airtable's comments endpoint returns `{ comments: [...] }`, unlike the
-				-- records endpoint's `{ records: [...] }`.
+				-- Comments endpoint returns { comments: [...] }, not { records: [...] }.
 				vim.list_extend(comments, decoded.comments or {})
 
 				local offset = next_offset(decoded)
@@ -272,13 +215,6 @@ function M.list_record_comments(record_id, callback)
 	fetch_page(nil)
 end
 
----Builds the request path (base + table, URL-escaped) for a specific record. Query
----parameters (filter, sort, pagination) are passed separately as a table so
----`plenary.curl` can percent-encode them correctly — hand-building a query string with
----`vim.uri_encode` mishandles reserved characters like `{`, `}`, `[`, `]` used in Airtable
----formulas and `sort[0][field]`-style parameter names.
----@param record_id string
----@return string
 local function build_record_path(record_id)
 	local opts = config.options
 	return string.format(
@@ -290,9 +226,6 @@ local function build_record_path(record_id)
 	)
 end
 
----Fetches a single record by id from Airtable.
----@param record_id string
----@param callback fun(record: AirtableRecord?, err: AirtableError?)
 function M.get_recordById(record_id, callback)
 	local token = config.token()
 	if not token then
@@ -305,7 +238,6 @@ function M.get_recordById(record_id, callback)
 
 	curl.get(path, {
 		headers = { Authorization = "Bearer " .. token },
-		-- Disable curl's URL globbing ("-g"), same reasoning as in `list_records`.
 		raw = { "-g" },
 		callback = vim.schedule_wrap(function(response)
 			if response.status ~= 200 then
@@ -316,8 +248,7 @@ function M.get_recordById(record_id, callback)
 				return
 			end
 
-			-- Airtable's "get record" endpoint returns the record object directly
-			-- (`{ id, createdTime, fields }`), unlike `list_records`'s `{ records: [...] }`.
+			-- Returns the record object directly, not { records: [...] }.
 			local ok, decoded = pcall(vim.json.decode, response.body)
 			if not ok then
 				callback(nil, { category = "Response Error", message = "failed to decode Airtable response" })
@@ -329,17 +260,10 @@ function M.get_recordById(record_id, callback)
 	})
 end
 
--- Cache of base_id -> resolved table id, since it never changes for a given
--- table/base pair within a session and resolving it requires an extra API call.
+-- base_id -> table id / full schema, cached for the session.
 local table_id_cache = {}
-
--- Cache of base_id -> full table schema (fields, including select choices), fetched once
--- per session and reused by both `get_table_id` and `get_field_choices`.
 local table_schema_cache = {}
 
----Fetches the configured table's full schema (id, fields, field types/choices) via
----Airtable's metadata API, caching the result for the session.
----@param callback fun(table_info: table?, err: AirtableError?)
 local function get_table_schema(callback)
 	local opts = config.options
 	local cached = table_schema_cache[opts.base_id]
@@ -390,10 +314,7 @@ local function get_table_schema(callback)
 	})
 end
 
----Resolves the configured table's id (e.g. "tblXXXXXXXXXXXXXX"), needed to build
----Airtable web URLs (record URLs use the table id, not its display name). Looks it up
----via the metadata API on first use and caches the result for the session.
----@param callback fun(table_id: string?, err: AirtableError?)
+-- Record URLs use the table id (tblXXX), not its display name.
 function M.get_table_id(callback)
 	local opts = config.options
 	local cached = table_id_cache[opts.base_id]
@@ -411,11 +332,6 @@ function M.get_table_id(callback)
 	end)
 end
 
----Fetches the list of valid choices for a `singleSelect`/`multipleSelects` field, via the
----table's metadata (Airtable does not expose field choices any other way). Returns an
----error if the field isn't found or isn't a select-type field.
----@param field_name string
----@param callback fun(choices: string[]?, err: AirtableError?)
 function M.get_field_choices(field_name, callback)
 	get_table_schema(function(table_info, err)
 		if err then
@@ -445,12 +361,7 @@ function M.get_field_choices(field_name, callback)
 	end)
 end
 
----Updates a single field on a record via Airtable's PATCH endpoint. Only the given field
----is modified — Airtable's PATCH (as opposed to PUT) leaves every other field untouched.
----@param record_id string
----@param field_name string
----@param value any The new value for `field_name` (a plain string for text/select fields)
----@param callback fun(record: AirtableRecord?, err: AirtableError?)
+-- PATCH leaves every other field on the record untouched.
 function M.update_record(record_id, field_name, value, callback)
 	local token = config.token()
 	if not token then
@@ -493,9 +404,6 @@ function M.update_record(record_id, field_name, value, callback)
 	})
 end
 
----Builds the Airtable web URL for a record, resolving the table id first if needed.
----@param record_id string
----@param callback fun(url: string?, err: AirtableError?)
 function M.record_url(record_id, callback)
 	local opts = config.options
 	M.get_table_id(function(table_id, err)
