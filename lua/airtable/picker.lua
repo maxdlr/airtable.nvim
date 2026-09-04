@@ -76,6 +76,61 @@ local function ordinal_text(record, result_line)
 	return table.concat(parts, " ")
 end
 
+-- Prefix that switches the picker from "fuzzy match the visible row" to "substring
+-- search across every configured `buffer.fields` value" (title, description, and any
+-- other field — not just what's shown in the result line). Chosen to look like a
+-- deliberate flag/marker rather than something a real query would start with.
+local DEEP_SEARCH_PREFIX = "--"
+
+---Concatenates every `buffer.fields` value for `record` into one lowercased blob, used
+---for deep/full-content search. Built once per record (cached on the entry) rather than
+---per keystroke, since the underlying field values never change during a picker session.
+---@param record AirtableRecord
+---@return string
+local function deep_search_text(record)
+	local parts = {}
+	for _, entry in ipairs(config.options.buffer.fields) do
+		local text = format_field(record.fields[entry.field])
+		if text ~= "" then
+			table.insert(parts, text)
+		end
+	end
+	return table.concat(parts, " "):lower()
+end
+
+---Builds a sorter that fuzzy-matches the visible row by default, or does a plain
+---substring search across every `buffer.fields` value when the prompt starts with
+---`DEEP_SEARCH_PREFIX` (e.g. typing "--feature-flag-xyz" searches descriptions/notes/etc,
+---not just what's shown in the result line) — entirely local, no extra API calls.
+---@return table sorter
+local function make_sorter()
+	local Sorter = require("telescope.sorters").Sorter
+	local fuzzy = require("telescope.config").values.generic_sorter({})
+
+	return Sorter:new({
+		scoring_function = function(_, prompt, ordinal, entry)
+			if prompt:sub(1, #DEEP_SEARCH_PREFIX) == DEEP_SEARCH_PREFIX then
+				local query = vim.trim(prompt:sub(#DEEP_SEARCH_PREFIX + 1))
+				if query == "" then return 1 end -- prefix alone with no query yet: show everything
+
+				entry._deep_search_text = entry._deep_search_text or deep_search_text(entry.value)
+				if entry._deep_search_text:find(query:lower(), 1, true) then
+					return 1 -- any positive score keeps the entry; exact ranking doesn't matter here
+				end
+				return -1 -- negative score filters the entry out
+			end
+
+			return fuzzy:scoring_function(prompt, ordinal, entry)
+		end,
+		highlighter = function(_, prompt, display)
+			if prompt:sub(1, #DEEP_SEARCH_PREFIX) == DEEP_SEARCH_PREFIX then
+				return {} -- no per-character highlight for deep search; it's not fuzzy-positional
+			end
+			return fuzzy.highlighter(fuzzy, prompt, display)
+		end,
+	})
+end
+
 ---Builds the segmented `display` function for a record entry: an optional leading icon
 ---resolved from `picker.result_line_prefix` (advanced/optional, see config docs), followed
 ---by one section per `result_line` entry, separated by " │ ". Missing fields render as "—".
@@ -193,7 +248,6 @@ end
 function M.pick(picker, fetch_records)
 	local pickers = require("telescope.pickers")
 	local finders = require("telescope.finders")
-	local conf = require("telescope.config").values
 	local actions = require("telescope.actions")
 	local action_state = require("telescope.actions.state")
 	local notify = require("airtable.notify").notify
@@ -201,7 +255,7 @@ function M.pick(picker, fetch_records)
 	local current_picker = pickers.new({}, {
 		prompt_title = picker.name .. " (loading…)",
 		finder = finders.new_table({ results = {} }),
-		sorter = conf.generic_sorter({}),
+		sorter = make_sorter(),
 		previewer = make_previewer(picker.result_line),
 		attach_mappings = function(prompt_bufnr, map)
 			actions.select_default:replace(function()

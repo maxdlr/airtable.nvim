@@ -188,6 +188,20 @@ result_line = {
 :Airtable Open bugs        " open a specific picker by name
 ```
 
+### Search
+
+Typing in the picker fuzzy-matches the visible result line by default (title, status,
+whatever `result_line` shows). Prefix your query with `--` to instead search the full
+content of every `buffer.fields` value — description, notes, anything not shown in the
+row — useful for finding a record by pasting a snippet, a feature flag name, or any text
+that only appears in a long field. Entirely local (no extra API calls): it searches the
+records already fetched for the current picker.
+
+```
+feature-flag-xyz         " matches only if it's in the visible row
+--feature-flag-xyz       " matches anywhere in the record's configured fields
+```
+
 Inside a record buffer, press `<CR>` for quick actions: open in browser, browse comments,
 copy the record's URL, or edit a field (if `buffer.editable` is configured).
 
