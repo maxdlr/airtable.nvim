@@ -75,6 +75,7 @@ the `data.records:read` scope, and grant it access to your base. If you configur
 ## Configuration
 
 ### Minimum config
+
 All Airtable fields are custom, most of the time, so don't forget to rename them to match their exact names.
 If you skip `pickers` entirely, `:Airtable` lists every record in `table_name`.
 
@@ -93,7 +94,9 @@ require('airtable').setup({
 ```
 
 ### Recommended config
+
 If you're in a dev company team, there might hundreds of records you don't need to see to focus on your work.
+
 - Define the fields you need in the `buffer`, to read the content you want.
 - Define only the `buffer.editable` fields you need to edit.
 - Define at least one default `picker` with filters to get only the ones you need to track.
@@ -103,7 +106,7 @@ require('airtable').setup({
   token_env = 'AIRTABLE_TOKEN',   -- name of the env var holding your token (not the token itself)
   base_id = 'appXXXXXXXXXXXXXX',  -- your Airtable base id
   table_name = 'Tickets',         -- exact table name (or its "tbl..." id) in that base
-  page_size = 100,                -- records fetched per API page (Airtable max: 100)
+  page_size = 20,                -- records fetched per API page (Airtable max: 100)
   default_filter = 'Assigned to me', -- picker opened by `:Airtable` with no argument
 
   buffer = {
@@ -141,6 +144,7 @@ require('airtable').setup({
 > (case-sensitive).
 
 ### Record styling
+
 Colors adapt to your colorscheme and never break the render.
 
 <details>
@@ -173,6 +177,7 @@ pickers = {
 ```
 
 #### `result_line[].hl`: conditional per-value colors
+
 Instead of one fixed color per section, `hl` can be a list of `{ value, color }` rules:
 
 ```lua
@@ -189,15 +194,16 @@ result_line = {
 },
 ```
 
-#### `date_format`: 
+#### `date_format`:
+
 Add `date_format` explicitly to a `buffer.fields` or `result_line` entry to override the
 auto-detected default, e.g. to show only the time, or `date` in the buffer too:
 
-| Value  | Result |
-| ------------- | ------------- |
-| `date_format = 'datetime` (default)  | 01/01/2026 - 21:09  |
-| `date_format = 'date` (default)  | 01/01/2026  |
-| `date_format = 'time` (default)  | 21:09  |
+| Value                               | Result             |
+| ----------------------------------- | ------------------ |
+| `date_format = 'datetime` (default) | 01/01/2026 - 21:09 |
+| `date_format = 'date` (default)     | 01/01/2026         |
+| `date_format = 'time` (default)     | 21:09              |
 
 ```lua
 buffer = {
@@ -218,6 +224,7 @@ pickers = {
 ```
 
 ##### `date_formats`: customizing the templates
+
 Override the display template for each mode globally, wherever `date_format` applies
 (explicit or auto-detected). Placeholders: `{DD}`, `{MM}`, `{YYYY}`, `{HH}`, `{mm}`.
 
