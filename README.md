@@ -1,4 +1,8 @@
-# airtable.nvim
+<p align="center">
+  <img width="100" height="83" alt="Airtable_idbbncOsuL_1" src="https://github.com/user-attachments/assets/2ef07cdc-5d24-429d-9a95-98ae3fe39812" />
+  <p/>
+
+<h1 align="center">airtable.nvim</h1>
 
 Browse, filter, and preview Airtable records from Neovim.
 
