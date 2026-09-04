@@ -101,6 +101,7 @@ local defaults = {
 	buffer = {
 		fields = {
 			{ key = "title", field = "Title" },
+			{ key = "status", field = "Status" },
 			{ key = "description", field = "Description" },
 		},
 	},
