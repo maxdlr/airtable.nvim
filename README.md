@@ -74,28 +74,54 @@ the `data.records:read` scope, and grant it access to your base. If you configur
 
 ## Configuration
 
-### Minimum config
+<details>
+<summary><b>Default config</b> (click to expand)</summary>
+  
+```lua
+require('airtable').setup({
+  token_env = 'AIRTABLE_TOKEN',
+  base_id = '',
+  table_name = '',
+  page_size = 20,
+  default_filter = 'All records',
+
+  buffer = {
+    fields = {                  
+      { key = 'title', field = 'Title' },  
+      { key = 'status', field = 'Status' },  
+      { key = 'description', field = 'Description' },
+    },
+  },
+
+  pickers = {   
+    {
+      name = 'All records,    
+      result_line = {           
+        { field = 'Status' },   
+        { field = 'Title' },
+        { field = 'Description' },
+      },
+    },
+  },
+})
+```
+</details>
+
+### Minimum config (to test out)
+If you're in a dev company team, there might hundreds of records you don't need to see to focus on your work.
 
 All Airtable fields are custom, most of the time, so don't forget to rename them to match their exact names.
 If you skip `pickers` entirely, `:Airtable` lists every record in `table_name`.
 
 ```lua
 require('airtable').setup({
-  token_env = 'AIRTABLE_TOKEN',   -- name of the env var holding your token (not the token itself)
-  base_id = 'appXXXXXXXXXXXXXX',  -- your Airtable base id
-  table_name = 'Tickets',         -- exact table name (or its "tbl..." id) in that base
-
-  buffer = {
-    fields = {                     -- rendered in this exact order when a record is opened
-      { key = 'title', field = 'Title' },             -- key="title" is special: the H1 heading
-      { key = 'description', field = 'Description' },
-    },
-  },
+  token_env = 'AIRTABLE_TOKEN',    -- name of the env var holding your token (not the token itself)
+ }
+),
 ```
 
 ### Recommended config
 
-If you're in a dev company team, there might hundreds of records you don't need to see to focus on your work.
 
 - Define the fields you need in the `buffer`, to read the content you want.
 - Define only the `buffer.editable` fields you need to edit.
@@ -103,37 +129,38 @@ If you're in a dev company team, there might hundreds of records you don't need 
 
 ```lua
 require('airtable').setup({
-  token_env = 'AIRTABLE_TOKEN',   -- name of the env var holding your token (not the token itself)
-  base_id = 'appXXXXXXXXXXXXXX',  -- your Airtable base id
-  table_name = 'Tickets',         -- exact table name (or its "tbl..." id) in that base
-  page_size = 20,                -- records fetched per API page (Airtable max: 100)
-  default_filter = 'Assigned to me', -- picker opened by `:Airtable` with no argument
+  token_env = 'AIRTABLE_TOKEN',                       -- name of the env var holding your token (not the token itself)
+  base_id = 'appXXXXXXXXXXXXXX',                      -- your Airtable base id
+  table_name = 'Tickets',                             -- exact table name (or its "tbl..." id) in that base
+  page_size = 20,                                     -- records fetched per API page (Airtable max: 100)
+  default_filter = 'Assigned to me',                  -- picker opened by `:Airtable` with no argument
 
   buffer = {
-    fields = {                     -- rendered in this exact order when a record is opened
+    fields = {                                        -- rendered in this exact order when a record is opened
       { key = 'title', field = 'Title' },             -- key="title" is special: the H1 heading
-      { key = 'status', field = 'Status' },            -- other keys become their own "## <Key>" section
-      { key = 'description', field = 'Description' },
+      { key = 'status', field = 'Status' },           -- other keys become their own "## <Key>" section
+      { key = 'description', field = 'Description' }, -- ...
     },
+
     -- Optional and off by default. Each entry adds an "Edit <field>" action to the
-    -- record view's <CR> menu. This is a WRITE operation — see "Editing fields" below.
+    -- record view's <CR> menu. This is a WRITE operation, see "Editing fields" below.
     editable = {
-      { field = 'Status', type = 'select' },              -- opens a picker of the field's choices
+      { field = 'Status', type = 'select' },                       -- opens a picker of the field's choices
       { field = 'PR link', type = 'text', name = 'Edit PR link' }, -- opens a small editable buffer
     },
   },
 
-  pickers = {                     -- one or more named views, switch between them by name
+  pickers = {                                           -- one or more named views, switch between them by name
     {
-      name = 'Assigned to me',    -- shown in the picker title; used to select this view
-      filters = {                 -- conditions combined with AND (omit to list everything)
-        { field = 'Assignee', value = 'Your Name' }, -- matches even array-shaped fields
+      name = 'Assigned to me',                          -- shown in the picker title; used to select this view
+      filters = {                                       -- conditions combined with AND (omit to list everything)
+        { field = 'Assignee', value = 'Your Name' },    -- matches even array-shaped fields
         { field = 'Type', value = 'Bug', only = true }, -- only=true: exact match instead
       },
-      sort = { field = 'Priority', order = 'asc' }, -- optional; order: 'asc' or 'desc'
-      result_line = {              -- columns shown per row, left to right
-        { field = 'Title' },       -- hl omitted: defaults to an identifier color
-        { field = 'Status', hl = '#FFA500' }, -- hl: a highlight group or hex color
+      sort = { field = 'Priority', order = 'asc' },     -- optional; order: 'asc' or 'desc'
+      result_line = {                                   -- columns shown per row, left to right
+        { field = 'Title' },                            -- hl omitted: defaults to an identifier color
+        { field = 'Status', hl = '#FFA500' },           -- hl: a highlight group or hex color
       },
     },
   },
@@ -165,10 +192,11 @@ pickers = {
       { field = 'Status' },
     },
     result_line_prefix = {
-      -- { icon, condition } pairs, checked in order — condition uses the same shape as `filters`
+      -- Condition uses the same shape as `filters`
       { '📝', { field = 'Status', value = 'In progress' } },
       { '▶️', { field = 'Status', value = 'To do' } },
       { '✅', { field = 'Status', value = 'Done', only = true } }, -- only=true still works here
+
       -- icon can also be a table to color it: { icon = '...', color = <hl group or hex> }
       { { icon = '󰲶', color = '#FFFFFF' }, { field = 'Status', value = 'Blocked' } },
     },
