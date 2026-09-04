@@ -250,7 +250,8 @@ feature-flag-xyz         " matches only if it's in the visible row
 ```
 
 Inside a record buffer, press `<CR>` for quick actions: open in browser, browse comments,
-copy the record's URL, or edit a field (if `buffer.editable` is configured).
+copy the record's URL, or edit a field (if `buffer.editable` is configured). With the
+cursor on a URL anywhere in the buffer, `o` opens it in your browser and `c` copies it.
 
 ### Editing fields
 
@@ -264,9 +265,7 @@ Each `buffer.editable` entry adds an "Edit `<field>`" (or a custom `name`) actio
   (fetched from Airtable). Pressing `<CR>` on a choice saves it immediately.
 - **`type = 'text'`** — opens a large centered floating buffer prefilled with the
   field's current value. Edit it like a normal buffer, then `<C-CR>` to save, or `:q` to
-  discard your changes. This buffer intentionally doesn't support `:w`/`:wa` — so tools
-  like auto-save plugins (which react to `InsertLeave`/`TextChanged`) can't trigger a
-  save while you're still editing.
+  discard your changes.
 
 After a successful edit, the record buffer refreshes in place to show the new value.
 
