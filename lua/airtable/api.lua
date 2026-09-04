@@ -44,9 +44,29 @@ function M.format_field(value)
 	return tostring(value)
 end
 
----Reformats an Airtable ISO-8601 timestamp (e.g. "2026-09-03T21:09:34.000Z") for display.
----Returns `text` unchanged if it doesn't match the expected timestamp shape, so a
----misconfigured `date_format` on a non-date field never breaks the render.
+---Default templates for each `date_format` mode. Placeholders: `{DD}` day, `{MM}` month,
+---`{YYYY}` year, `{HH}` hour (24h), `{mm}` minute. Overridable via the advanced
+---`date_formats` setup option — see `airtable.config`.
+local DEFAULT_DATE_TEMPLATES = {
+	datetime = "{DD}/{MM}/{YYYY} - {HH}:{mm}",
+	date = "{DD}/{MM}/{YYYY}",
+	time = "{HH}:{mm}",
+}
+
+---Checks whether `text` looks like an Airtable ISO-8601 timestamp
+---(e.g. "2026-09-03T21:09:34.000Z"), without actually reformatting it. Used to
+---auto-detect date-like fields that have no explicit `date_format` configured.
+---@param text string
+---@return boolean
+function M.looks_like_date(text)
+	return text:match("^%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d") ~= nil
+end
+
+---Reformats an Airtable ISO-8601 timestamp (e.g. "2026-09-03T21:09:34.000Z") for display,
+---using the template configured for `mode` (see `airtable.config`'s `date_formats`
+---option), falling back to `DEFAULT_DATE_TEMPLATES` if none is configured. Returns `text`
+---unchanged if it doesn't match the expected timestamp shape, so a misconfigured
+---`date_format` on a non-date field never breaks the render.
 ---@param text string Already-formatted field text (see `format_field`)
 ---@param mode 'datetime'|'date'|'time'
 ---@return string
@@ -56,15 +76,16 @@ function M.format_date(text, mode)
 		return text
 	end
 
-	local date_part = string.format("%s/%s/%s", day, month, year)
-	local time_part = string.format("%s:%s", hour, minute)
+	local configured = config.options.date_formats and config.options.date_formats[mode]
+	local template = configured or DEFAULT_DATE_TEMPLATES[mode]
 
-	if mode == "date" then
-		return date_part
-	elseif mode == "time" then
-		return time_part
-	end
-	return string.format("%s - %s", date_part, time_part)
+	return (template:gsub("{(%a+)}", {
+		DD = day,
+		MM = month,
+		YYYY = year,
+		HH = hour,
+		mm = minute,
+	}))
 end
 
 ---Percent-encodes a URL path segment (RFC 3986: keep alphanumerics and `-._~`, escape

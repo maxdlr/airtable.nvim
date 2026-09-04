@@ -155,8 +155,14 @@ local function make_display(record, picker)
 
 	for i, section in ipairs(picker.result_line) do
 		local text = format_field(record.fields[section.field])
-		if section.date_format and text ~= "" then
-			text = api.format_date(text, section.date_format)
+		if text ~= "" then
+			-- Explicit `date_format` always wins; otherwise, auto-detect an ISO-8601
+			-- timestamp and default to "date" (date-only) in the picker row — the full
+			-- record buffer defaults to "datetime" instead (see view.lua).
+			local mode = section.date_format or (api.looks_like_date(text) and "date" or nil)
+			if mode then
+				text = api.format_date(text, mode)
+			end
 		end
 		if text == "" then
 			text = "—"

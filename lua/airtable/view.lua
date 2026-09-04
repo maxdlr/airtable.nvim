@@ -91,8 +91,14 @@ local function render_buffer(record, opts)
 		end
 
 		local text = format_field(raw_value)
-		if entry.date_format and text ~= "" then
-			text = api.format_date(text, entry.date_format)
+		if text ~= "" then
+			-- Explicit `date_format` always wins; otherwise, auto-detect an ISO-8601
+			-- timestamp and default to the full "datetime" format in the record buffer
+			-- (the picker's result_line defaults to "date" instead — see picker.lua).
+			local mode = entry.date_format or (api.looks_like_date(text) and "datetime" or nil)
+			if mode then
+				text = api.format_date(text, mode)
+			end
 		end
 		if text == "" then
 			text = "_Empty._"

@@ -181,16 +181,19 @@ result_line = {
 
 #### `date_format`: reformatting Airtable timestamps
 
-Airtable date fields come back as ISO-8601 (e.g. `"2026-09-03T21:09:34.000Z"`). Add
-`date_format` to a `buffer.fields` or `result_line` entry to reformat it — set
-independently per context, e.g. the full record view shows the full timestamp while the
-picker row only shows the date:
+Airtable date fields come back as ISO-8601 (e.g. `"2026-09-03T21:09:34.000Z"`). Fields
+that look like a timestamp are reformatted automatically — no configuration needed — using
+`'datetime'` in the record buffer (`"03/09/2026 - 21:09"`) and `'date'` in a picker's
+`result_line` (`"03/09/2026"`).
+
+Add `date_format` explicitly to a `buffer.fields` or `result_line` entry to override the
+auto-detected default, e.g. to show only the time, or `date` in the buffer too:
 
 ```lua
 buffer = {
   fields = {
     { key = 'title', field = 'Title' },
-    { key = 'created_at', field = 'Created At', date_format = 'datetime' }, -- "03/09/2026 - 21:09"
+    { key = 'created_at', field = 'Created At', date_format = 'datetime' }, -- explicit, same as auto-detected default
   },
 },
 pickers = {
@@ -198,15 +201,30 @@ pickers = {
     name = 'Tickets',
     result_line = {
       { field = 'Title' },
-      { field = 'Created At', date_format = 'date' }, -- "03/09/2026" only, in the picker row
+      { field = 'Created At', date_format = 'time' }, -- override: show only "21:09"
     },
   },
 },
 ```
 
-`date_format` accepts `'datetime'` (`"03/09/2026 - 21:09"`), `'date'` (`"03/09/2026"`), or
-`'time'` (`"21:09"`). A value that isn't a valid ISO timestamp is left unchanged rather
-than breaking the render.
+`date_format` accepts `'datetime'`, `'date'`, or `'time'`. A value that isn't a valid ISO
+timestamp is left unchanged rather than breaking the render.
+
+##### `date_formats`: customizing the templates
+
+Override the display template for each mode globally, wherever `date_format` applies
+(explicit or auto-detected). Placeholders: `{DD}`, `{MM}`, `{YYYY}`, `{HH}`, `{mm}`.
+
+```lua
+require('airtable').setup({
+  -- ...
+  date_formats = {
+    datetime = '{YYYY}-{MM}-{DD} {HH}h{mm}', -- default: '{DD}/{MM}/{YYYY} - {HH}:{mm}'
+    date = '{YYYY}-{MM}-{DD}',               -- default: '{DD}/{MM}/{YYYY}'
+    time = '{HH}h{mm}',                      -- default: '{HH}:{mm}'
+  },
+})
+```
 
 </details>
 

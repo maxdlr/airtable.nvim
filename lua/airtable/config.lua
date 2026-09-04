@@ -71,6 +71,12 @@
 ---  fields explicitly listed here are ever editable. Omit entirely to keep the plugin
 ---  fully read-only.
 
+---@class AirtableDateFormats
+---@field datetime string? Template for `date_format = 'datetime'`. Placeholders: `{DD}`,
+---  `{MM}`, `{YYYY}`, `{HH}`, `{mm}`. Default: `"{DD}/{MM}/{YYYY} - {HH}:{mm}"`.
+---@field date string? Template for `date_format = 'date'`. Default: `"{DD}/{MM}/{YYYY}"`.
+---@field time string? Template for `date_format = 'time'`. Default: `"{HH}:{mm}"`.
+
 ---@class AirtableConfig
 ---@field token_env string Name of the environment variable holding the Airtable personal access token
 ---@field base_id string Airtable base id (e.g. "appXXXXXXXXXXXXXX")
@@ -79,6 +85,9 @@
 ---@field pickers AirtablePicker[]
 ---@field default_filter string Name of the picker (from `pickers`) opened when none is passed to `open()`
 ---@field page_size integer Airtable page size (max 100)
+---@field date_formats AirtableDateFormats? Advanced/optional: overrides the display
+---  template for each `date_format` mode, applied everywhere a `date_format` is used
+---  (explicitly, or auto-detected — see `AirtableBufferField.date_format`).
 
 local M = {}
 
@@ -237,6 +246,16 @@ function M.setup(opts)
         string.format('"buffer.fields" entry "%s" has invalid date_format "%s" (expected "datetime", "date", or "time")', tostring(buffer_field.key), tostring(buffer_field.date_format)),
         vim.log.levels.ERROR
       )
+    end
+  end
+
+  if M.options.date_formats then
+    for mode, template in pairs(M.options.date_formats) do
+      if not vim.tbl_contains({ 'datetime', 'date', 'time' }, mode) then
+        notify('Config Error', string.format('"date_formats" has unknown key "%s" (expected "datetime", "date", or "time")', tostring(mode)), vim.log.levels.ERROR)
+      elseif type(template) ~= 'string' or template == '' then
+        notify('Config Error', string.format('"date_formats.%s" must be a non-empty string', mode), vim.log.levels.ERROR)
+      end
     end
   end
 
