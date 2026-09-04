@@ -102,33 +102,33 @@ end
 ---substring search across every `buffer.fields` value when the prompt starts with
 ---`DEEP_SEARCH_PREFIX` (e.g. typing "--feature-flag-xyz" searches descriptions/notes/etc,
 ---not just what's shown in the result line) — entirely local, no extra API calls.
+---
+---Patches the *actual* configured sorter's `scoring_function` in place, rather than
+---wrapping it in a new `Sorter` object — some sorters (notably telescope-fzf-native) are
+---stateful and rely on `init`/`start`/`destroy` lifecycle hooks being called by Telescope
+---on the exact same object it manages; delegating to a nested sorter instance skips that
+---lifecycle and crashes (e.g. fzf-native's internal `slab` never gets allocated).
 ---@return table sorter
 local function make_sorter()
-	local Sorter = require("telescope.sorters").Sorter
-	local fuzzy = require("telescope.config").values.generic_sorter({})
+	local sorter = require("telescope.config").values.generic_sorter({})
+	local original_scoring_function = sorter.scoring_function
 
-	return Sorter:new({
-		scoring_function = function(_, prompt, ordinal, entry)
-			if prompt:sub(1, #DEEP_SEARCH_PREFIX) == DEEP_SEARCH_PREFIX then
-				local query = vim.trim(prompt:sub(#DEEP_SEARCH_PREFIX + 1))
-				if query == "" then return 1 end -- prefix alone with no query yet: show everything
+	sorter.scoring_function = function(self, prompt, ordinal, entry, ...)
+		if prompt:sub(1, #DEEP_SEARCH_PREFIX) == DEEP_SEARCH_PREFIX then
+			local query = vim.trim(prompt:sub(#DEEP_SEARCH_PREFIX + 1))
+			if query == "" then return 1 end -- prefix alone with no query yet: show everything
 
-				entry._deep_search_text = entry._deep_search_text or deep_search_text(entry.value)
-				if entry._deep_search_text:find(query:lower(), 1, true) then
-					return 1 -- any positive score keeps the entry; exact ranking doesn't matter here
-				end
-				return -1 -- negative score filters the entry out
+			entry._deep_search_text = entry._deep_search_text or deep_search_text(entry.value)
+			if entry._deep_search_text:find(query:lower(), 1, true) then
+				return 1 -- any positive score keeps the entry; exact ranking doesn't matter here
 			end
+			return -1 -- negative score filters the entry out
+		end
 
-			return fuzzy:scoring_function(prompt, ordinal, entry)
-		end,
-		highlighter = function(_, prompt, display)
-			if prompt:sub(1, #DEEP_SEARCH_PREFIX) == DEEP_SEARCH_PREFIX then
-				return {} -- no per-character highlight for deep search; it's not fuzzy-positional
-			end
-			return fuzzy.highlighter(fuzzy, prompt, display)
-		end,
-	})
+		return original_scoring_function(self, prompt, ordinal, entry, ...)
+	end
+
+	return sorter
 end
 
 ---Builds the segmented `display` function for a record entry: an optional leading icon
