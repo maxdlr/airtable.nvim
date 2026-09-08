@@ -288,8 +288,9 @@ feature-flag-xyz         " matches only if it's in the visible row
 ```
 
 Inside a record buffer, press `<CR>` for quick actions: open in browser, browse comments,
-copy the record's URL, or edit a field (if `buffer.editable` is configured). With the
-cursor on a URL anywhere in the buffer, `o` opens it in your browser and `c` copies it.
+copy the record's URL, refresh the buffer with the record's latest data, or edit a field
+(if `buffer.editable` is configured). With the cursor on a URL anywhere in the buffer,
+`o` opens it in your browser and `c` copies it.
 
 ### Editing fields
 

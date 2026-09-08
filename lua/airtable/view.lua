@@ -167,6 +167,7 @@ local function open_context_menu(buf, record_id)
 		{ "Open in browser", "open_in_browser" },
 		{ "Browse comments", "browse_comments" },
 		{ "Copy record URL", "copy_url" },
+		{ "Refresh", "refresh" },
 	}
 
 	if #editable > 0 then
@@ -195,6 +196,17 @@ local function open_context_menu(buf, record_id)
 				end
 				vim.fn.setreg("+", url)
 				notify("Copied", "record URL copied to clipboard", vim.log.levels.INFO)
+			end)
+		elseif action == "refresh" then
+			api.get_recordById(record_id, function(record, err)
+				if err then
+					notify(err.category, err.message, vim.log.levels.ERROR)
+					return
+				end
+				if vim.api.nvim_buf_is_valid(buf) then
+					refresh_buffer(buf, record)
+				end
+				notify("Refreshed", "record reloaded from Airtable", vim.log.levels.INFO)
 			end)
 		elseif type(action) == "table" then
 			local entry = action
