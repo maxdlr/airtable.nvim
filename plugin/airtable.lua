@@ -10,3 +10,9 @@ end, {
     return require('airtable').picker_names()
   end,
 })
+
+vim.api.nvim_create_user_command('AirtableResume', function()
+  require('airtable').resume()
+end, {
+  desc = 'Reopen the last viewed Airtable record, or the default picker if none',
+})

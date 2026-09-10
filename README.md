@@ -274,6 +274,7 @@ require('airtable').setup({
 ```vim
 :Airtable                  " open the default picker
 :Airtable Open bugs        " open a specific picker by name
+:AirtableResume             " reopen the last viewed record, or the default picker if none
 ```
 
 ### Search
@@ -313,6 +314,7 @@ After a successful edit, the record buffer refreshes in place to show the new va
 ```lua
 vim.keymap.set('n', '<leader>aa', function() require('airtable').open() end, { desc = 'Airtable' })
 vim.keymap.set('n', '<leader>ab', function() require('airtable').open('Open bugs') end, { desc = 'Airtable: open bugs' })
+vim.keymap.set('n', '<leader>ar', function() require('airtable').resume() end, { desc = 'Airtable: resume' })
 ```
 
 ## Scope

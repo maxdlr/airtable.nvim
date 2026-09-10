@@ -10,6 +10,13 @@ local M = {}
 
 M.NAMESPACE = vim.api.nvim_create_namespace("airtable_view")
 
+local last_record_id = nil
+
+---@return string?
+function M.last_record_id()
+	return last_record_id
+end
+
 -- Plain buffer character (not a sign/statuscolumn) so it renders the same in a real
 -- buffer and in Telescope's previewer.
 local LEFT_BORDER = "▌"
@@ -245,7 +252,9 @@ local function open_context_menu(buf, record_id)
 				winblend = 5,
 				layout_config = {
 					prompt_position = "top",
-					width = function(_, max_columns, _) return math.max(40, math.floor(max_columns * 0.25)) end,
+					width = function(_, max_columns, _)
+						return math.max(40, math.floor(max_columns * 0.25))
+					end,
 					height = #menu_items + 4,
 				},
 			}),
@@ -273,7 +282,9 @@ local function open_context_menu(buf, record_id)
 						return function()
 							move(prompt_bufnr)
 							local guard = 0
-							while action_state.get_selected_entry().value[2] == MENU_SEPARATOR and guard < #menu_items do
+							while
+								action_state.get_selected_entry().value[2] == MENU_SEPARATOR and guard < #menu_items
+							do
 								move(prompt_bufnr)
 								guard = guard + 1
 							end
@@ -287,7 +298,9 @@ local function open_context_menu(buf, record_id)
 					actions.select_default:replace(function()
 						local selection = action_state.get_selected_entry()
 						local action = selection.value[2]
-						if action == MENU_SEPARATOR then return end
+						if action == MENU_SEPARATOR then
+							return
+						end
 						actions.close(prompt_bufnr)
 						run_action(action)
 					end)
@@ -331,6 +344,8 @@ function M.open(record_id)
 			notify("No Record", string.format('no record found for id "%s"', record_id), vim.log.levels.INFO)
 			return
 		end
+
+		last_record_id = record.id
 
 		local buf_name = "airtable://" .. record.id
 		local existing_buf = vim.fn.bufnr(buf_name)
