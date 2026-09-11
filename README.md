@@ -291,7 +291,9 @@ feature-flag-xyz         " matches only if it's in the visible row
 Inside a record buffer, press `<CR>` for quick actions: open in browser, browse comments,
 copy the record's URL, refresh the buffer with the record's latest data, or edit a field
 (if `buffer.editable` is configured). With the cursor on a URL anywhere in the buffer,
-`o` opens it in your browser and `c` copies it.
+`o` opens it in your browser and `c` copies it. With the cursor on a section, `e` edits
+that field directly — same as the `<CR>` menu's "Edit" action, without the extra step.
+If the section isn't listed in `buffer.editable`, it toasts instead of editing.
 
 ### Editing fields
 

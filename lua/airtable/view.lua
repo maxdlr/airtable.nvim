@@ -17,6 +17,17 @@ function M.last_record_id()
 	return last_record_id
 end
 
+---@param key string
+---@return AirtableBufferField?
+function M.find_buffer_field(key)
+	for _, entry in ipairs(config.options.buffer.fields) do
+		if entry.key == key then
+			return entry
+		end
+	end
+	return nil
+end
+
 -- Plain buffer character (not a sign/statuscolumn) so it renders the same in a real
 -- buffer and in Telescope's previewer.
 local LEFT_BORDER = "▌"
@@ -51,6 +62,7 @@ end
 ---@param record AirtableRecord
 ---@return string[] lines
 ---@return { line: integer, col: integer, opts: table }[] extmarks
+---@return table<integer, string> line_to_key
 local function render_buffer(record, opts)
 	opts = opts or {}
 	local exclude = opts.exclude or {}
@@ -72,6 +84,7 @@ local function render_buffer(record, opts)
 
 	local lines = { "# " .. title, "" }
 	local extmarks = {}
+	local line_to_key = {}
 
 	for _, entry in ipairs(fields) do
 		local key = entry.key
@@ -98,6 +111,7 @@ local function render_buffer(record, opts)
 		end
 		local heading = key:sub(1, 1):upper() .. key:sub(2)
 		local section_style = style.classify(key)
+		local section_start_line = #lines
 
 		if section_style == "pill" then
 			table.insert(lines, "")
@@ -134,10 +148,14 @@ local function render_buffer(record, opts)
 			table.insert(lines, "")
 		end
 
+		for line_idx = section_start_line, #lines - 1 do
+			line_to_key[line_idx] = key
+		end
+
 		::continue::
 	end
 
-	return lines, extmarks
+	return lines, extmarks, line_to_key
 end
 M.render_buffer = render_buffer
 
@@ -148,8 +166,10 @@ function M.apply_extmarks(buf, extmarks)
 	end
 end
 
+local buf_line_to_key = {} ---@type table<integer, table<integer, string>>
+
 local function refresh_buffer(buf, record)
-	local lines, extmarks = render_buffer(record)
+	local lines, extmarks, line_to_key = render_buffer(record)
 	vim.bo[buf].modifiable = true
 	vim.bo[buf].readonly = false
 	vim.api.nvim_buf_clear_namespace(buf, M.NAMESPACE, 0, -1)
@@ -157,9 +177,35 @@ local function refresh_buffer(buf, record)
 	M.apply_extmarks(buf, extmarks)
 	vim.bo[buf].modifiable = false
 	vim.bo[buf].readonly = true
+	buf_line_to_key[buf] = line_to_key
 end
 
 local MENU_SEPARATOR = false
+
+---@param buf integer
+---@param record_id string
+---@param entry AirtableEditableField
+local function start_edit(buf, record_id, entry)
+	local edit = require("airtable.edit")
+	local on_updated = function(updated_record)
+		if vim.api.nvim_buf_is_valid(buf) then
+			refresh_buffer(buf, updated_record)
+		end
+	end
+
+	if entry.type == "select" then
+		edit.edit_select(record_id, entry.field, on_updated)
+	elseif entry.type == "text" then
+		api.get_recordById(record_id, function(record, err)
+			if err then
+				notify(err.category, err.message, vim.log.levels.ERROR)
+				return
+			end
+			local current_value = format_field(record.fields[entry.field])
+			edit.edit_text(record_id, entry.field, current_value, on_updated)
+		end)
+	end
+end
 
 -- Built as a real Telescope picker (not vim.ui.select) so the separator between
 -- built-in and edit actions renders consistently (dimmed, unselectable) regardless of
@@ -216,26 +262,7 @@ local function open_context_menu(buf, record_id)
 				notify("Refreshed", "record reloaded from Airtable", vim.log.levels.INFO)
 			end)
 		elseif type(action) == "table" then
-			local entry = action
-			local edit = require("airtable.edit")
-			local on_updated = function(updated_record)
-				if vim.api.nvim_buf_is_valid(buf) then
-					refresh_buffer(buf, updated_record)
-				end
-			end
-
-			if entry.type == "select" then
-				edit.edit_select(record_id, entry.field, on_updated)
-			elseif entry.type == "text" then
-				api.get_recordById(record_id, function(record, err)
-					if err then
-						notify(err.category, err.message, vim.log.levels.ERROR)
-						return
-					end
-					local current_value = format_field(record.fields[entry.field])
-					edit.edit_text(record_id, entry.field, current_value, on_updated)
-				end)
-			end
+			start_edit(buf, record_id, action)
 		end
 	end
 
@@ -383,6 +410,31 @@ function M.open(record_id)
 			vim.fn.setreg("+", url)
 			notify("Copied", "URL copied to clipboard", vim.log.levels.INFO)
 		end, { buffer = buf, desc = "Copy URL under cursor" })
+
+		vim.keymap.set("n", "e", function()
+			local line = vim.api.nvim_win_get_cursor(0)[1] - 1
+			local key = (buf_line_to_key[buf] or {})[line]
+			if not key then
+				notify("Not Editable", "no field under cursor", vim.log.levels.INFO)
+				return
+			end
+
+			local entry
+			for _, e in ipairs(config.options.buffer.editable or {}) do
+				local field_entry = M.find_buffer_field(key)
+				if field_entry and e.field == field_entry.field then
+					entry = e
+					break
+				end
+			end
+
+			if not entry then
+				notify("Not Editable", string.format('add "%s" to buffer.editable to edit it', key), vim.log.levels.INFO)
+				return
+			end
+
+			start_edit(buf, record.id, entry)
+		end, { buffer = buf, desc = "Edit field under cursor" })
 
 		vim.api.nvim_set_current_buf(buf)
 	end)
