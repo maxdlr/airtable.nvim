@@ -56,7 +56,6 @@ function M.edit_text(record_id, field, current_value, on_updated)
   vim.bo[buf].buftype = 'nofile'
   vim.bo[buf].bufhidden = 'wipe'
   vim.bo[buf].swapfile = false
-  vim.bo[buf].filetype = 'markdown'
   vim.api.nvim_buf_set_name(buf, 'airtable-edit://' .. record_id .. '/' .. field)
 
   local width = math.min(120, math.floor(vim.o.columns * 0.8))
