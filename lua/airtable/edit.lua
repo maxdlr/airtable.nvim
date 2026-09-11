@@ -68,7 +68,7 @@ function M.edit_text(record_id, field, current_value, on_updated)
     row = math.floor((vim.o.lines - height) / 2),
     col = math.floor((vim.o.columns - width) / 2),
     border = 'rounded',
-    title = string.format(' Edit %s (<C-CR> to save, :q to cancel) ', field),
+    title = string.format(' Edit %s (<C-CR> to save, q to cancel) ', field),
     title_pos = 'center',
     style = 'minimal',
   })
@@ -91,6 +91,11 @@ function M.edit_text(record_id, field, current_value, on_updated)
   end
 
   vim.keymap.set({ 'n', 'i' }, '<C-CR>', save, { buffer = buf, desc = 'Save edit' })
+  vim.keymap.set('n', 'q', function()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end, { buffer = buf, desc = 'Cancel edit' })
 end
 
 return M
