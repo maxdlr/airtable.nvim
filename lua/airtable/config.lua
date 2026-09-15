@@ -43,6 +43,8 @@
 ---@class AirtableBufferStyle
 ---@field section_border_character string? Left border character for plain-style
 ---  sections (heading + body). Default: "▌"
+---@field editable_section_border_color string? Hex color for the left border of
+---  plain-style sections that are in `buffer.editable`. Default: "#FFA500" (orange)
 
 ---@class AirtableBufferConfig
 ---@field fields AirtableBufferField[] Rendered in this order (except `title`)
@@ -219,6 +221,18 @@ function M.setup(opts)
 	if style and style.section_border_character then
 		if type(style.section_border_character) ~= "string" or style.section_border_character == "" then
 			notify("Config Error", '"buffer.style.section_border_character" must be a non-empty string', vim.log.levels.ERROR)
+		end
+	end
+	if style and style.editable_section_border_color then
+		if
+			type(style.editable_section_border_color) ~= "string"
+			or not style.editable_section_border_color:match("^#%x%x%x%x%x%x$")
+		then
+			notify(
+				"Config Error",
+				'"buffer.style.editable_section_border_color" must be a hex color like "#FFA500"',
+				vim.log.levels.ERROR
+			)
 		end
 	end
 

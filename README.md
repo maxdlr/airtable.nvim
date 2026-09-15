@@ -179,13 +179,19 @@ Colors adapt to your colorscheme and never break the render.
 
 #### `buffer.style.section_border_character`: left border glyph
 
-Plain-style sections (heading + body) get a left border bar down the whole sectiong.
-Defaults to `"▌"`;
+Plain-style sections (heading + body) get a left border bar down the whole section.
+Defaults to `"▌"`; override it with any single character.
+Sections listed in `buffer.editable` get a distinct border color
+(default: orange, `"#FFA500"`), override it with `editable_section_border_color`:
 
 ```lua
 buffer = {
   fields = { --[[ ... ]] },
-  style = { section_border_character = '|' },
+  editable = { --[[ ... ]] },
+  style = {
+    section_border_character = '|',
+    editable_section_border_color = '#D1FF1B',
+  },
 },
 ```
 

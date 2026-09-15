@@ -32,10 +32,37 @@ end
 -- buffer and in Telescope's previewer. Overridable via buffer.style.section_border_character.
 local DEFAULT_LEFT_BORDER = "▌"
 local LEFT_BORDER_HL = "Comment"
+local DEFAULT_EDITABLE_BORDER_COLOR = "#FFA500"
 
 local function left_border()
 	local style = config.options.buffer.style
 	return (style and style.section_border_character) or DEFAULT_LEFT_BORDER
+end
+
+---@param key string
+---@return boolean
+local function is_editable_key(key)
+	local field_entry = M.find_buffer_field(key)
+	if not field_entry then
+		return false
+	end
+	for _, entry in ipairs(config.options.buffer.editable or {}) do
+		if entry.field == field_entry.field then
+			return true
+		end
+	end
+	return false
+end
+
+---@param key string
+---@return string highlight_group
+local function left_border_hl(key)
+	if not is_editable_key(key) then
+		return LEFT_BORDER_HL
+	end
+	local style = config.options.buffer.style
+	local color = (style and style.editable_section_border_color) or DEFAULT_EDITABLE_BORDER_COLOR
+	return colors.create_foreground_highlight(color)
 end
 
 ---@param heading string
@@ -139,17 +166,18 @@ local function render_buffer(record, opts)
 			table.insert(lines, "")
 		else
 			local border = left_border()
+			local border_hl = left_border_hl(key)
 			table.insert(lines, "## " .. heading)
 			table.insert(extmarks, {
 				line = #lines - 1,
 				col = 0,
-				opts = { virt_text = { { border, LEFT_BORDER_HL } }, virt_text_pos = "inline" },
+				opts = { virt_text = { { border, border_hl } }, virt_text_pos = "inline" },
 			})
 			table.insert(lines, "")
 			table.insert(extmarks, {
 				line = #lines - 1,
 				col = 0,
-				opts = { virt_text = { { border, LEFT_BORDER_HL } }, virt_text_pos = "inline" },
+				opts = { virt_text = { { border, border_hl } }, virt_text_pos = "inline" },
 			})
 			for _, body_line in ipairs(vim.split(text, "\n", { plain = true })) do
 				table.insert(lines, body_line)
@@ -157,7 +185,7 @@ local function render_buffer(record, opts)
 					line = #lines - 1,
 					col = 0,
 					opts = {
-						virt_text = { { border, LEFT_BORDER_HL } },
+						virt_text = { { border, border_hl } },
 						virt_text_pos = "inline",
 					},
 				})
