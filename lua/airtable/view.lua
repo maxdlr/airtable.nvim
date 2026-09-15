@@ -30,7 +30,7 @@ end
 
 -- Plain buffer character (not a sign/statuscolumn) so it renders the same in a real
 -- buffer and in Telescope's previewer. Overridable via buffer.style.section_border_character.
-local DEFAULT_LEFT_BORDER = "▌"
+local DEFAULT_LEFT_BORDER = "▌ "
 local LEFT_BORDER_HL = "Comment"
 local DEFAULT_EDITABLE_BORDER_COLOR = "#FFA500"
 
@@ -474,7 +474,11 @@ function M.open(record_id)
 			end
 
 			if not entry then
-				notify("Not Editable", string.format('add "%s" to buffer.editable to edit it', key), vim.log.levels.INFO)
+				notify(
+					"Not Editable",
+					string.format('add "%s" to buffer.editable to edit it', key),
+					vim.log.levels.INFO
+				)
 				return
 			end
 
