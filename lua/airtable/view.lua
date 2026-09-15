@@ -29,9 +29,14 @@ function M.find_buffer_field(key)
 end
 
 -- Plain buffer character (not a sign/statuscolumn) so it renders the same in a real
--- buffer and in Telescope's previewer.
-local LEFT_BORDER = "▌"
+-- buffer and in Telescope's previewer. Overridable via buffer.style.section_border_character.
+local DEFAULT_LEFT_BORDER = "▌"
 local LEFT_BORDER_HL = "Comment"
+
+local function left_border()
+	local style = config.options.buffer.style
+	return (style and style.section_border_character) or DEFAULT_LEFT_BORDER
+end
 
 ---@param heading string
 ---@param text string
@@ -133,14 +138,26 @@ local function render_buffer(record, opts)
 			})
 			table.insert(lines, "")
 		else
-			vim.list_extend(lines, { "## " .. heading, "" })
+			local border = left_border()
+			table.insert(lines, "## " .. heading)
+			table.insert(extmarks, {
+				line = #lines - 1,
+				col = 0,
+				opts = { virt_text = { { border, LEFT_BORDER_HL } }, virt_text_pos = "inline" },
+			})
+			table.insert(lines, "")
+			table.insert(extmarks, {
+				line = #lines - 1,
+				col = 0,
+				opts = { virt_text = { { border, LEFT_BORDER_HL } }, virt_text_pos = "inline" },
+			})
 			for _, body_line in ipairs(vim.split(text, "\n", { plain = true })) do
 				table.insert(lines, body_line)
 				table.insert(extmarks, {
 					line = #lines - 1,
 					col = 0,
 					opts = {
-						virt_text = { { LEFT_BORDER, LEFT_BORDER_HL } },
+						virt_text = { { border, LEFT_BORDER_HL } },
 						virt_text_pos = "inline",
 					},
 				})

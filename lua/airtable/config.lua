@@ -40,9 +40,14 @@
 ---@field field string
 ---@field date_format 'datetime'|'date'|'time'|nil
 
+---@class AirtableBufferStyle
+---@field section_border_character string? Left border character for plain-style
+---  sections (heading + body). Default: "▌"
+
 ---@class AirtableBufferConfig
 ---@field fields AirtableBufferField[] Rendered in this order (except `title`)
 ---@field editable AirtableEditableField[]? Write operation — only these fields are editable
+---@field style AirtableBufferStyle?
 
 ---@class AirtableDateFormats
 ---@field datetime string? Placeholders: {DD} {MM} {YYYY} {HH} {mm}
@@ -207,6 +212,13 @@ function M.setup(opts)
 				),
 				vim.log.levels.ERROR
 			)
+		end
+	end
+
+	local style = M.options.buffer.style
+	if style and style.section_border_character then
+		if type(style.section_border_character) ~= "string" or style.section_border_character == "" then
+			notify("Config Error", '"buffer.style.section_border_character" must be a non-empty string', vim.log.levels.ERROR)
 		end
 	end
 

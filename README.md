@@ -85,32 +85,33 @@ require('airtable').setup({
   page_size = 20,
   default_filter = 'All records',
 
-  buffer = {
-    fields = {                  
-      { key = 'title', field = 'Title' },  
-      { key = 'status', field = 'Status' },  
-      { key = 'description', field = 'Description' },
-    },
-  },
+buffer = {
+fields = {  
+ { key = 'title', field = 'Title' },  
+ { key = 'status', field = 'Status' },  
+ { key = 'description', field = 'Description' },
+},
+},
 
-  pickers = {   
-    {
-      name = 'All records,    
-      result_line = {           
-        { field = 'Status' },   
-        { field = 'Title' },
-        { field = 'Description' },
-      },
-    },
-  },
+pickers = {  
+ {
+name = 'All records,  
+ result_line = {  
+ { field = 'Status' },  
+ { field = 'Title' },
+{ field = 'Description' },
+},
+},
+},
 })
-```
+
+````
 </details>
 
 ### Minimum config (to test out)
-If you're in a dev company team, there might hundreds of records you don't need to see to focus on your work.  
+If you're in a dev company team, there might hundreds of records you don't need to see to focus on your work.
 
-All Airtable fields are custom, most of the time, **so don't forget to rename them to match their exact names.**  
+All Airtable fields are custom, most of the time, **so don't forget to rename them to match their exact names.**
 If you skip `pickers` entirely, `:Airtable` lists **every** record in `table_name`.
 
 ```lua
@@ -118,10 +119,9 @@ require('airtable').setup({
   token_env = 'AIRTABLE_TOKEN',    -- name of the env var holding your token (not the token itself)
  }
 ),
-```
+````
 
 ### Recommended config
-
 
 - Define the fields you need in the `buffer`, to read the content you want.
 - Define only the `buffer.editable` fields you need to edit.
@@ -176,6 +176,18 @@ Colors adapt to your colorscheme and never break the render.
 
 <details>
 <summary><b>Advanced settings</b> (optional, click to expand)</summary>
+
+#### `buffer.style.section_border_character`: left border glyph
+
+Plain-style sections (heading + body) get a left border bar down the whole sectiong.
+Defaults to `"▌"`;
+
+```lua
+buffer = {
+  fields = { --[[ ... ]] },
+  style = { section_border_character = '|' },
+},
+```
 
 #### `result_line_prefix`: conditional icons
 
