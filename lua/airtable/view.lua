@@ -67,23 +67,25 @@ end
 
 ---@param heading string
 ---@param text string
+---@param border string
+---@param border_hl string
 ---@return { [1]: string, [2]: string }[]
-local function pill_line_chunks(heading, text)
+local function pill_line_chunks(heading, text, border, border_hl)
 	if text == "_Empty._" then
-		return { { heading .. ": ", "Title" }, { text, "Comment" } }
+		return { { border, border_hl }, { heading .. ": ", "Title" }, { text, "Comment" } }
 	end
 
 	local ok, chunks = pcall(function()
 		local hex = colors.color_for_value(text)
 		local pill_chunks = bubble.make_bubble(text, hex)
-		local result = { { heading .. " ", "Title" } }
+		local result = { { border, border_hl }, { heading .. " ", "Title" } }
 		vim.list_extend(result, pill_chunks)
 		return result
 	end)
 	if ok then
 		return chunks
 	end
-	return { { heading .. ": " .. text, "Normal" } }
+	return { { border, border_hl }, { heading .. ": " .. text, "Normal" } }
 end
 
 -- Builds markdown lines + extmark specs for a record from buffer.fields, in config
@@ -152,7 +154,10 @@ local function render_buffer(record, opts)
 			table.insert(extmarks, {
 				line = line_idx,
 				col = 0,
-				opts = { virt_text = pill_line_chunks(heading, text), virt_text_pos = "overlay" },
+				opts = {
+					virt_text = pill_line_chunks(heading, text, left_border(), left_border_hl(key)),
+					virt_text_pos = "overlay",
+				},
 			})
 			table.insert(lines, "")
 		elseif section_style == "heading" then
