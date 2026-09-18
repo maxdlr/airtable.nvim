@@ -47,6 +47,7 @@
 ---  plain-style sections that are in `buffer.editable`. Default: "#FFA500" (orange)
 
 ---@class AirtableBufferConfig
+---@field name { field: string }? Buffer name is "Airtable: <field value>" (default: "Airtable: <Title>")
 ---@field fields AirtableBufferField[] Rendered in this order (except `title`)
 ---@field editable AirtableEditableField[]? Write operation — only these fields are editable
 ---@field style AirtableBufferStyle?
@@ -76,6 +77,7 @@ local defaults = {
 	base_id = "",
 	table_name = "",
 	buffer = {
+		name = { field = "Title" },
 		fields = {
 			{ key = "title", field = "Title" },
 			{ key = "status", field = "Status" },
@@ -220,7 +222,11 @@ function M.setup(opts)
 	local style = M.options.buffer.style
 	if style and style.section_border_character then
 		if type(style.section_border_character) ~= "string" or style.section_border_character == "" then
-			notify("Config Error", '"buffer.style.section_border_character" must be a non-empty string', vim.log.levels.ERROR)
+			notify(
+				"Config Error",
+				'"buffer.style.section_border_character" must be a non-empty string',
+				vim.log.levels.ERROR
+			)
 		end
 	end
 	if style and style.editable_section_border_color then
@@ -276,7 +282,7 @@ function M.setup(opts)
 end
 
 ---@param name string?
----@return (AirtablePicker & { formula: string? })?
+---@return (AirtablePicker) & { formula: string? })?
 function M.get_picker(name)
 	local target = name or M.options.default_filter
 	for _, picker in ipairs(M.options.pickers) do
