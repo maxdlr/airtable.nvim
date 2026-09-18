@@ -437,7 +437,7 @@ function M.open(record_id)
 		vim.bo[buf].bufhidden = "wipe"
 		vim.bo[buf].swapfile = false
 		vim.bo[buf].filetype = "markdown"
-		vim.api.nvim_buf_set_name(buf, " " .. buf_name)
+		vim.api.nvim_buf_set_name(buf, "Airtable  " .. buf_name)
 		refresh_buffer(buf, record)
 
 		vim.keymap.set("n", "<CR>", function()
