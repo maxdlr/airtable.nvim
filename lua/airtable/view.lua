@@ -422,10 +422,11 @@ function M.open(record_id)
 			return
 		end
 
-		local record_identifier = config.options.buffer.name.field or "id"
-		last_record_id = record[record_identifier]
+		local record_identifier = config.options.buffer.name.field
+		local identifier_value = record_identifier and format_field(record.fields[record_identifier]) or record.id
+		last_record_id = record.id
 
-		local buf_name = "airtable://" .. record[record_identifier]
+		local buf_name = "airtable://" .. (identifier_value or record.id)
 		local existing_buf = vim.fn.bufnr(buf_name)
 		if existing_buf ~= -1 then
 			pcall(vim.api.nvim_buf_delete, existing_buf, { force = true })
@@ -440,7 +441,7 @@ function M.open(record_id)
 		refresh_buffer(buf, record)
 
 		vim.keymap.set("n", "<CR>", function()
-			open_context_menu(buf, record[record_identifier])
+			open_context_menu(buf, record.id)
 		end, { buffer = buf, desc = "Airtable record actions" })
 
 		vim.keymap.set("n", "o", function()

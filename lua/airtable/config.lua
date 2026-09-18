@@ -282,7 +282,7 @@ function M.setup(opts)
 end
 
 ---@param name string?
----@return (AirtablePicker) & { formula: string? })?
+---@return (AirtablePicker & { formula: string? })?
 function M.get_picker(name)
 	local target = name or M.options.default_filter
 	for _, picker in ipairs(M.options.pickers) do
