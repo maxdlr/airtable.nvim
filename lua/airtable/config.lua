@@ -2,6 +2,10 @@
 ---@field field string
 ---@field value string|string[] "any of these" (OR) if a list
 ---@field only boolean? Exact match instead of the default contains/FIND match
+---@field by 'email'? Match a collaborator field's exact email instead of its display
+---  name. Airtable's formula engine can't see a collaborator's email, so this condition
+---  is applied client-side after fetching (can't be combined with a formula-only picker
+---  that has zero other conditions to fall back to "list everything" for the API call).
 
 ---@class AirtableSort
 ---@field field string
@@ -121,14 +125,21 @@ local function condition_formula(condition)
 	return single_match_formula(condition.field, condition.value, condition.only)
 end
 
+-- by = 'email' conditions can't be turned into a formula (Airtable's formula engine
+-- can't see a collaborator's email) — they're applied client-side, see M.filter_records.
+local function formula_eligible(condition)
+	return condition.by ~= "email"
+end
+
 local function build_formula(picker)
-	if not picker.filters or #picker.filters == 0 then
+	local filters = vim.tbl_filter(formula_eligible, picker.filters or {})
+	if #filters == 0 then
 		return nil
 	end
-	if #picker.filters == 1 then
-		return condition_formula(picker.filters[1])
+	if #filters == 1 then
+		return condition_formula(filters[1])
 	end
-	local parts = vim.tbl_map(condition_formula, picker.filters)
+	local parts = vim.tbl_map(condition_formula, filters)
 	return string.format("AND(%s)", table.concat(parts, ", "))
 end
 
@@ -142,7 +153,47 @@ local function value_matches(actual_text, expected, only)
 	return actual_text:find(expected, 1, true) ~= nil
 end
 
+-- Extracts the email(s) from a raw collaborator field value: {id,email,name} (single)
+-- or an array of those. Always an exact match — "contains" doesn't make sense for emails.
+local function emails_from_field(raw_value)
+	if type(raw_value) ~= "table" then
+		return {}
+	end
+	if raw_value.email then
+		return { raw_value.email }
+	end
+	local emails = {}
+	for _, item in ipairs(raw_value) do
+		if type(item) == "table" and item.email then
+			table.insert(emails, item.email)
+		end
+	end
+	return emails
+end
+
+local function email_matches(raw_value, expected)
+	for _, email in ipairs(emails_from_field(raw_value)) do
+		if email == expected then
+			return true
+		end
+	end
+	return false
+end
+
 function M.matches_condition(record, condition)
+	if condition.by == "email" then
+		local raw_value = record.fields[condition.field]
+		if type(condition.value) == "table" then
+			for _, v in ipairs(condition.value) do
+				if email_matches(raw_value, v) then
+					return true
+				end
+			end
+			return false
+		end
+		return email_matches(raw_value, condition.value)
+	end
+
 	local format_field = require("airtable.api").format_field
 	local actual_text = format_field(record.fields[condition.field])
 
@@ -155,6 +206,30 @@ function M.matches_condition(record, condition)
 		return false
 	end
 	return value_matches(actual_text, condition.value, condition.only)
+end
+
+-- Applies a picker's by='email' filter conditions to an already-fetched records list
+-- (the only conditions not already covered by the API-side formula). AND-ed together,
+-- same as the formula, so combining an email filter with a regular one narrows results.
+---@param records AirtableRecord[]
+---@param picker AirtablePicker
+---@return AirtableRecord[]
+function M.filter_records(records, picker)
+	local email_conditions = vim.tbl_filter(function(c)
+		return c.by == "email"
+	end, picker.filters or {})
+	if #email_conditions == 0 then
+		return records
+	end
+
+	return vim.tbl_filter(function(record)
+		for _, condition in ipairs(email_conditions) do
+			if not M.matches_condition(record, condition) then
+				return false
+			end
+		end
+		return true
+	end, records)
 end
 
 function M.resolve_prefix_icon(record, picker)
@@ -190,6 +265,15 @@ function M.setup(opts)
 				string.format('picker "%s" has no result_line configured', picker.name),
 				vim.log.levels.WARN
 			)
+		end
+		for _, condition in ipairs(picker.filters or {}) do
+			if condition.by and condition.by ~= "email" then
+				notify(
+					"Config Error",
+					string.format('picker "%s" has a filter with invalid "by" value "%s" (expected "email")', picker.name, tostring(condition.by)),
+					vim.log.levels.ERROR
+				)
+			end
 		end
 	end
 

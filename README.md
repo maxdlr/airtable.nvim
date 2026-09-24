@@ -156,6 +156,7 @@ require('airtable').setup({
       filters = {                                       -- conditions combined with AND (omit to list everything)
         { field = 'Assignee', value = 'Your Name' },    -- matches even array-shaped fields
         { field = 'Type', value = 'Bug', only = true }, -- only=true: exact match instead
+        { field = 'Assignee', value = 'you@co.com', by = 'email' }, -- exact collaborator email match
       },
       sort = { field = 'Priority', order = 'asc' },     -- optional; order: 'asc' or 'desc'
       result_line = {                                   -- columns shown per row, left to right

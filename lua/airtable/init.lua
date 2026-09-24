@@ -22,7 +22,13 @@ function M.open(picker_name)
 	end
 
 	require("airtable.picker").pick(picker, function(callback)
-		require("airtable.api").list_records(picker.formula, picker.sort, callback)
+		require("airtable.api").list_records(picker.formula, picker.sort, function(records, err)
+			if err then
+				callback(nil, err)
+				return
+			end
+			callback(config.filter_records(records, picker), nil)
+		end)
 	end)
 end
 
