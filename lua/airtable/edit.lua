@@ -19,12 +19,26 @@ function M.edit_select(record_id, field, on_updated)
     local conf = require('telescope.config').values
     local actions = require 'telescope.actions'
     local action_state = require 'telescope.actions.state'
+    local themes = require 'telescope.themes'
+
+    local prompt_title = 'Edit ' .. field
+    local longest = #prompt_title
+    for _, choice in ipairs(choices) do
+      longest = math.max(longest, #choice)
+    end
+    -- Padding for borders/icons; capped so a handful of short choices doesn't look
+    -- cramped and a few long ones don't take over the screen.
+    local width = math.max(30, math.min(80, longest + 10))
+    local height = math.max(5, math.min(15, #choices + 3))
 
     pickers
-      .new({}, {
-        prompt_title = 'Edit ' .. field,
+      .new(themes.get_dropdown({
+        layout_config = { width = width, height = height },
+      }), {
+        prompt_title = prompt_title,
         finder = finders.new_table { results = choices },
         sorter = conf.generic_sorter {},
+        previewer = false,
         attach_mappings = function(prompt_bufnr, map)
           actions.select_default:replace(function()
             local selection = action_state.get_selected_entry()
