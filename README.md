@@ -15,7 +15,7 @@ Airtable URL, and optional safe editing of specific fields you explicitly config
 
 - Neovim ≥ 0.10
 - [plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
-- [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim)
+- [snacks.nvim](https://github.com/folke/snacks.nvim)
 
 ## Installation
 
@@ -25,7 +25,7 @@ Airtable URL, and optional safe editing of specific fields you explicitly config
 ```lua
 vim.pack.add({
   'https://github.com/nvim-lua/plenary.nvim',
-  'https://github.com/nvim-telescope/telescope.nvim',
+  'https://github.com/folke/snacks.nvim',
   'https://github.com/maxdlr/airtable.nvim',
 })
 ```
@@ -38,7 +38,7 @@ vim.pack.add({
 ```lua
 {
   'you/airtable.nvim',
-  dependencies = { 'nvim-lua/plenary.nvim', 'nvim-telescope/telescope.nvim' },
+  dependencies = { 'nvim-lua/plenary.nvim', 'folke/snacks.nvim' },
   opts = { --[[ see Configuration below ]] },
 }
 ```
@@ -51,7 +51,7 @@ vim.pack.add({
 ```lua
 use({
   'you/airtable.nvim',
-  requires = { 'nvim-lua/plenary.nvim', 'nvim-telescope/telescope.nvim' },
+  requires = { 'nvim-lua/plenary.nvim', 'folke/snacks.nvim' },
   config = function() require('airtable').setup({ --[[ see Configuration below ]] }) end,
 })
 ```
@@ -322,7 +322,7 @@ If the section isn't listed in `buffer.editable`, it toasts instead of editing.
 Each `buffer.editable` entry adds an "Edit `<field>`" (or a custom `name`) action to the
 `<CR>` menu:
 
-- **`type = 'select'`** — opens a Telescope picker listing the field's valid choices
+- **`type = 'select'`** — opens a picker listing the field's valid choices
   (fetched from Airtable). Pressing `<CR>` on a choice saves it immediately.
 - **`type = 'text'`** — opens a large centered floating buffer prefilled with the
   field's current value. Edit it like a normal buffer, then `<C-CR>` to save, or `q` to

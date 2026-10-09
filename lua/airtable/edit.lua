@@ -14,15 +14,8 @@ function M.edit_select(record_id, field, on_updated)
       return
     end
 
-    local pickers = require 'telescope.pickers'
-    local finders = require 'telescope.finders'
-    local conf = require('telescope.config').values
-    local actions = require 'telescope.actions'
-    local action_state = require 'telescope.actions.state'
-    local themes = require 'telescope.themes'
-
-    local prompt_title = 'Edit ' .. field
-    local longest = #prompt_title
+    local title = 'Edit ' .. field
+    local longest = #title
     for _, choice in ipairs(choices) do
       longest = math.max(longest, #choice)
     end
@@ -31,33 +24,35 @@ function M.edit_select(record_id, field, on_updated)
     local width = math.max(30, math.min(80, longest + 10))
     local height = math.max(5, math.min(15, #choices + 3))
 
-    pickers
-      .new(themes.get_dropdown({
-        layout_config = { width = width, height = height },
-      }), {
-        prompt_title = prompt_title,
-        finder = finders.new_table { results = choices },
-        sorter = conf.generic_sorter {},
-        previewer = false,
-        attach_mappings = function(prompt_bufnr, map)
-          actions.select_default:replace(function()
-            local selection = action_state.get_selected_entry()
-            actions.close(prompt_bufnr)
-            if not selection then return end
+    local items = {}
+    for _, choice in ipairs(choices) do
+      table.insert(items, { text = choice })
+    end
 
-            api.update_record(record_id, field, selection[1], function(record, update_err)
-              if update_err then
-                notify(update_err.category, update_err.message, vim.log.levels.ERROR)
-                return
-              end
-              notify('Updated', string.format('%s set to "%s"', field, selection[1]), vim.log.levels.INFO)
-              on_updated(record)
-            end)
-          end)
-          return true
-        end,
-      })
-      :find()
+    Snacks.picker.pick({
+      title = title,
+      items = items,
+      format = function(item)
+        return { { item.text, 'Normal' } }
+      end,
+      layout = {
+        preset = 'select',
+        layout = { width = width, min_width = width, max_width = width, max_height = height },
+      },
+      confirm = function(picker, item)
+        picker:close()
+        if not item then return end
+
+        api.update_record(record_id, field, item.text, function(record, update_err)
+          if update_err then
+            notify(update_err.category, update_err.message, vim.log.levels.ERROR)
+            return
+          end
+          notify('Updated', string.format('%s set to "%s"', field, item.text), vim.log.levels.INFO)
+          on_updated(record)
+        end)
+      end,
+    })
   end)
 end
 

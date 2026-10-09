@@ -5,15 +5,12 @@ local format_field = api.format_field
 
 local M = {}
 
-local entry_display = require("telescope.pickers.entry_display")
-local previewers = require("telescope.previewers")
-
 -- Default hl by section position when a result_line entry omits `hl`.
 local DEFAULT_HL_BY_POSITION = {
-	"TelescopeResultsIdentifier",
-	"TelescopeResultsSpecialComment",
+	"SnacksPickerIdentifier",
+	"SnacksPickerSpecial",
 }
-local DEFAULT_HL_FALLBACK = "TelescopeResultsComment"
+local DEFAULT_HL_FALLBACK = "SnacksPickerComment"
 
 -- hex color -> generated highlight group name, so repeated colors don't redefine the group.
 local hex_hl_cache = {}
@@ -69,7 +66,7 @@ end
 -- every buffer.fields value" (description, notes, etc).
 local DEEP_SEARCH_PREFIX = "--"
 
--- Cached per-record (on the entry) since field values don't change during a session.
+-- Cached per-record (on the item) since field values don't change during a session.
 local function deep_search_text(record)
 	local parts = {}
 	for _, entry in ipairs(config.options.buffer.fields) do
@@ -81,41 +78,40 @@ local function deep_search_text(record)
 	return table.concat(parts, " "):lower()
 end
 
--- Patches the *actual* configured sorter's scoring_function in place rather than
--- wrapping it in a new Sorter object: stateful sorters (e.g. telescope-fzf-native) rely
--- on init/start/destroy lifecycle hooks being called by Telescope on the exact object it
--- manages — delegating to a nested instance skips that and crashes (fzf-native's `slab`
--- never gets allocated).
----@return table sorter
-local function make_sorter()
-	local sorter = require("telescope.config").values.generic_sorter({})
-	local original_scoring_function = sorter.scoring_function
+-- Patches the *actual* matcher instance's `match` method in place rather than wrapping
+-- it: Snacks drives matching through this one object per picker (same reasoning as the
+-- old Telescope sorter patch — replacing the instance instead of patching it in place
+-- would desync it from whatever internal state/lifecycle Snacks manages on it).
+---@param picker snacks.Picker
+local function patch_matcher_for_deep_search(picker)
+	local matcher = picker.matcher
+	local original_match = matcher.match
+	local DEFAULT_SCORE = require("snacks.picker.core.matcher").DEFAULT_SCORE
 
-	sorter.scoring_function = function(self, prompt, ordinal, entry, ...)
-		if prompt:sub(1, #DEEP_SEARCH_PREFIX) == DEEP_SEARCH_PREFIX then
-			local query = vim.trim(prompt:sub(#DEEP_SEARCH_PREFIX + 1))
+	matcher.match = function(self, item)
+		local pattern = self.pattern or ""
+		if pattern:sub(1, #DEEP_SEARCH_PREFIX) == DEEP_SEARCH_PREFIX then
+			local query = vim.trim(pattern:sub(#DEEP_SEARCH_PREFIX + 1))
 			if query == "" then
-				return 1
+				return DEFAULT_SCORE
 			end
 
-			entry._deep_search_text = entry._deep_search_text or deep_search_text(entry.value)
-			if entry._deep_search_text:find(query:lower(), 1, true) then
-				return 1
+			item._deep_search_text = item._deep_search_text or deep_search_text(item.record)
+			if item._deep_search_text:find(query:lower(), 1, true) then
+				return DEFAULT_SCORE
 			end
-			return -1
+			return 0
 		end
 
-		return original_scoring_function(self, prompt, ordinal, entry, ...)
+		return original_match(self, item)
 	end
-
-	return sorter
 end
 
 -- Leading icon (from result_line_prefix) + one section per result_line entry, separated
--- by " │ ". Missing fields render as "—"; last section fills remaining width.
+-- by " • ". Missing fields render as "—".
 ---@param record AirtableRecord
 ---@param picker AirtablePicker
----@return function
+---@return snacks.picker.Highlight[]
 local function make_display(record, picker)
 	local sections = {}
 
@@ -143,19 +139,14 @@ local function make_display(record, picker)
 		table.insert(sections, { text, resolve_hl(section.hl, i, text) })
 	end
 
-	local items = {}
-	for i = 1, #sections do
-		items[i] = i == #sections and { remaining = true } or { width = nil }
+	local chunks = {}
+	for i, section in ipairs(sections) do
+		if i > 1 then
+			table.insert(chunks, { " • ", "Comment" })
+		end
+		table.insert(chunks, { section[1], section[2] })
 	end
-
-	local displayer = entry_display.create({
-		separator = " • ",
-		items = items,
-	})
-
-	return function()
-		return displayer(sections)
-	end
+	return chunks
 end
 
 -- buffer.fields keys already shown in result_line, so the preview doesn't repeat them.
@@ -176,91 +167,97 @@ end
 
 -- Renders buffer.fields (minus what result_line already shows) using data already
 -- fetched by the picker — no extra request per preview.
+---@param result_line AirtableResultSection[]
+---@return fun(ctx: snacks.picker.preview.ctx)
 local function make_previewer(result_line)
 	local exclude = buffer_keys_shown_in_result_line(result_line)
 
-	return previewers.new_buffer_previewer({
-		title = "Preview",
-		define_preview = function(self, entry)
-			local lines, extmarks = view.render_buffer(entry.value, { exclude = exclude, skip_missing = true })
-			vim.bo[self.state.bufnr].modifiable = true
-			vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, lines)
-			-- previewer buffer is reused across selections, not recreated each time
-			vim.api.nvim_buf_clear_namespace(self.state.bufnr, view.NAMESPACE, 0, -1)
-			view.apply_extmarks(self.state.bufnr, extmarks)
-			vim.bo[self.state.bufnr].filetype = "markdown"
-			vim.bo[self.state.bufnr].modifiable = false
-			vim.bo[self.state.bufnr].buftype = "nofile"
-		end,
-	})
+	return function(ctx)
+		ctx.preview:reset()
+		local lines, extmarks = view.render_buffer(ctx.item.record, { exclude = exclude, skip_missing = true })
+		ctx.preview:set_lines(lines)
+		ctx.preview:set_title("Preview")
+		vim.bo[ctx.buf].filetype = "markdown"
+		view.apply_extmarks(ctx.buf, extmarks)
+	end
 end
 
-local function make_finder(records, picker)
-	local finders = require("telescope.finders")
-	return finders.new_table({
-		results = records,
-		entry_maker = function(record)
-			return {
-				value = record,
-				display = make_display(record, picker),
-				ordinal = ordinal_text(record, picker.result_line),
-			}
-		end,
-	})
+---@param record AirtableRecord
+---@param picker AirtablePicker
+---@return snacks.picker.Item
+local function make_item(record, picker)
+	return {
+		text = ordinal_text(record, picker.result_line),
+		record = record,
+	}
 end
 
--- Opens the picker immediately with a "Loading…" title and no results, then refreshes
--- it in place once fetch_records's callback fires — avoids the command appearing to
--- hang while the network request is in flight.
+-- Opens the picker immediately with a "Loading…" title; Snacks' async finder populates
+-- items as fetch_records's callback fires, so the UI shows up right away instead of the
+-- whole command appearing to hang while the network request is in flight.
 ---@param picker AirtablePicker
 ---@param fetch_records fun(callback: fun(records: AirtableRecord[]?, err: AirtableError?))
 function M.pick(picker, fetch_records)
-	local pickers = require("telescope.pickers")
-	local finders = require("telescope.finders")
-	local actions = require("telescope.actions")
-	local action_state = require("telescope.actions.state")
 	local notify = require("airtable.notify").notify
+	local snacks_picker ---@type snacks.Picker?
 
-	local current_picker = pickers.new({}, {
-		prompt_title = picker.name .. " (loading…)",
-		finder = finders.new_table({ results = {} }),
-		sorter = make_sorter(),
-		previewer = make_previewer(picker.result_line),
-		attach_mappings = function(prompt_bufnr, map)
-			actions.select_default:replace(function()
-				--@type AirtableRecord
-				local selection = action_state.get_selected_entry()
-				actions.close(prompt_bufnr)
-				if selection then
-					view.open(selection.value.id)
+	snacks_picker = Snacks.picker.pick({
+		title = picker.name .. " (loading…)",
+		format = function(item)
+			return make_display(item.record, picker)
+		end,
+		preview = make_previewer(picker.result_line),
+		finder = function(_, _)
+			return function(cb)
+				-- Bridges fetch_records's async callback (network I/O via plenary.curl,
+				-- itself vim.schedule_wrap'd) into Snacks' coroutine-based finder: capture
+				-- the running async task, suspend it, and resume it once the real callback
+				-- fires — same pattern Snacks' own proc.lua source uses for libuv callbacks.
+				-- A plain vim.wait busy-loop here would be unsafe: this function runs inside
+				-- a coroutine driven by Snacks' own scheduler, and re-entering the event loop
+				-- from inside it isn't a supported bridge point.
+				--
+				-- fetch_records's callback could in principle fire synchronously (before
+				-- suspend() below ever runs) — resume() is a no-op if called before the
+				-- matching suspend(), which would permanently stall the finder. Guard
+				-- against that ordering with a flag instead of assuming async timing.
+				local async = require("snacks.picker.util.async").running()
+				local done = false
+
+				fetch_records(function(records, err)
+					if err then
+						notify(err.category, err.message, vim.log.levels.ERROR)
+					elseif #records == 0 then
+						notify("No Records", string.format('no records for picker "%s"', picker.name), vim.log.levels.INFO)
+					else
+						for _, record in ipairs(records) do
+							cb(make_item(record, picker))
+						end
+						if snacks_picker then
+							snacks_picker.title = picker.name
+							snacks_picker:update_titles()
+						end
+					end
+					done = true
+					if async then
+						async:resume()
+					end
+				end)
+
+				if async and not done then
+					async:suspend()
 				end
-			end)
-			return true
+			end
+		end,
+		confirm = function(p, item)
+			p:close()
+			if item then
+				view.open(item.record.id)
+			end
 		end,
 	})
-	current_picker:find()
 
-	fetch_records(function(records, err)
-		if err then
-			pcall(actions.close, current_picker.prompt_bufnr)
-			notify(err.category, err.message, vim.log.levels.ERROR)
-			return
-		end
-		if #records == 0 then
-			pcall(actions.close, current_picker.prompt_bufnr)
-			notify("No Records", string.format('no records for picker "%s"', picker.name), vim.log.levels.INFO)
-			return
-		end
-
-		if vim.api.nvim_buf_is_valid(current_picker.prompt_bufnr) then
-			pcall(function()
-				if current_picker.layout.prompt.border then
-					current_picker.layout.prompt.border:change_title(picker.name)
-				end
-			end)
-			current_picker:refresh(make_finder(records, picker), { reset_prompt = false })
-		end
-	end)
+	patch_matcher_for_deep_search(snacks_picker)
 end
 
 return M

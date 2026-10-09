@@ -33,19 +33,12 @@ local function comment_lines(comment)
   return lines
 end
 
-local function make_previewer()
-  local previewers = require 'telescope.previewers'
-  return previewers.new_buffer_previewer {
-    title = 'Comment',
-    define_preview = function(self, entry)
-      local lines = comment_lines(entry.value)
-      vim.bo[self.state.bufnr].modifiable = true
-      vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, lines)
-      vim.bo[self.state.bufnr].filetype = 'markdown'
-      vim.bo[self.state.bufnr].modifiable = false
-      vim.bo[self.state.bufnr].buftype = 'nofile'
-    end,
-  }
+---@param ctx snacks.picker.preview.ctx
+local function preview_comment(ctx)
+  ctx.preview:reset()
+  ctx.preview:set_lines(comment_lines(ctx.item.comment))
+  ctx.preview:set_title('Comment')
+  vim.bo[ctx.buf].filetype = 'markdown'
 end
 
 -- Airtable has no per-comment permalink, so selecting one copies the record's URL instead.
@@ -60,43 +53,30 @@ function M.pick(record_id)
       return
     end
 
-    local pickers = require 'telescope.pickers'
-    local finders = require 'telescope.finders'
-    local conf = require('telescope.config').values
-    local actions = require 'telescope.actions'
-    local action_state = require 'telescope.actions.state'
+    local items = {}
+    for _, comment in ipairs(comments) do
+      table.insert(items, { text = comment_preview(comment), comment = comment })
+    end
 
-    pickers
-      .new({}, {
-        prompt_title = 'Comments',
-        finder = finders.new_table {
-          results = comments,
-          entry_maker = function(comment)
-            return {
-              value = comment,
-              display = comment_preview(comment),
-              ordinal = comment_preview(comment),
-            }
-          end,
-        },
-        sorter = conf.generic_sorter {},
-        previewer = make_previewer(),
-        attach_mappings = function(prompt_bufnr, map)
-          actions.select_default:replace(function()
-            actions.close(prompt_bufnr)
-            api.record_url(record_id, function(url, url_err)
-              if url_err then
-                notify(url_err.category, url_err.message, vim.log.levels.ERROR)
-                return
-              end
-              vim.fn.setreg('+', url)
-              notify('Copied', 'record URL copied to clipboard', vim.log.levels.INFO)
-            end)
-          end)
-          return true
-        end,
-      })
-      :find()
+    Snacks.picker.pick({
+      title = 'Comments',
+      items = items,
+      format = function(item)
+        return { { item.text, 'Normal' } }
+      end,
+      preview = preview_comment,
+      confirm = function(picker)
+        picker:close()
+        api.record_url(record_id, function(url, url_err)
+          if url_err then
+            notify(url_err.category, url_err.message, vim.log.levels.ERROR)
+            return
+          end
+          vim.fn.setreg('+', url)
+          notify('Copied', 'record URL copied to clipboard', vim.log.levels.INFO)
+        end)
+      end,
+    })
   end)
 end
 

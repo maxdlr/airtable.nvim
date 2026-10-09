@@ -29,7 +29,7 @@ function M.find_buffer_field(key)
 end
 
 -- Plain buffer character (not a sign/statuscolumn) so it renders the same in a real
--- buffer and in Telescope's previewer. Overridable via buffer.style.section_border_character.
+-- buffer and in the picker's previewer. Overridable via buffer.style.section_border_character.
 local DEFAULT_LEFT_BORDER = "▌ "
 local LEFT_BORDER_HL = "Comment"
 local DEFAULT_EDITABLE_BORDER_COLOR = "#FFA500"
@@ -257,26 +257,26 @@ local function start_edit(buf, record_id, entry)
 	end
 end
 
--- Built as a real Telescope picker (not vim.ui.select) so the separator between
--- built-in and edit actions renders consistently (dimmed, unselectable) regardless of
--- the user's vim.ui.select backend.
+-- Built as a real picker (not vim.ui.select) so the separator between built-in and
+-- edit actions renders consistently (dimmed, unselectable) regardless of the user's
+-- vim.ui.select backend.
 ---@param buf integer
 ---@param record_id string
 local function open_context_menu(buf, record_id)
 	local editable = config.options.buffer.editable or {}
 
-	---@type { [1]: string, [2]: string|function|false }[]
+	---@type { label: string, action: string|table|false }[]
 	local menu_items = {
-		{ "Open in browser", "open_in_browser" },
-		{ "Browse comments", "browse_comments" },
-		{ "Copy record URL", "copy_url" },
-		{ "Refresh", "refresh" },
+		{ label = "Open in browser", action = "open_in_browser" },
+		{ label = "Browse comments", action = "browse_comments" },
+		{ label = "Copy record URL", action = "copy_url" },
+		{ label = "Refresh", action = "refresh" },
 	}
 
 	if #editable > 0 then
-		table.insert(menu_items, { "───────────────", MENU_SEPARATOR })
+		table.insert(menu_items, { label = "───────────────", action = MENU_SEPARATOR })
 		for _, entry in ipairs(editable) do
-			table.insert(menu_items, { entry.name or ("Edit " .. entry.field), entry })
+			table.insert(menu_items, { label = entry.name or ("Edit " .. entry.field), action = entry })
 		end
 	end
 
@@ -316,76 +316,70 @@ local function open_context_menu(buf, record_id)
 		end
 	end
 
-	local pickers = require("telescope.pickers")
-	local finders = require("telescope.finders")
-	local actions = require("telescope.actions")
-	local action_state = require("telescope.actions.state")
-	local themes = require("telescope.themes")
-	local telescope_config = require("telescope.config")
+	-- Skips over the separator row when moving the selection, so it can never be
+	-- landed on (and therefore never look "selectable").
+	---@param step integer
+	local function move_skipping_separator(picker, step)
+		picker.list:move(step)
+		local guard = 0
+		local current = picker:current({ resolve = false })
+		while current and current.action == MENU_SEPARATOR and guard < #menu_items do
+			picker.list:move(step)
+			current = picker:current({ resolve = false })
+			guard = guard + 1
+		end
+	end
 
-	pickers
-		.new(
-			themes.get_dropdown({
-				winblend = 5,
-				layout_config = {
-					prompt_position = "top",
-					width = function(_, max_columns, _)
-						return math.max(40, math.floor(max_columns * 0.25))
-					end,
-					height = #menu_items + 4,
+	Snacks.picker.pick({
+		title = "Airtable record",
+		items = menu_items,
+		format = function(item)
+			local is_separator = item.action == MENU_SEPARATOR
+			return { { item.label, is_separator and "Comment" or "Normal" } }
+		end,
+		layout = {
+			preset = "select",
+			layout = {
+				width = math.max(40, math.floor(vim.o.columns * 0.25)),
+				min_width = 40,
+				max_height = #menu_items + 4,
+			},
+		},
+		win = {
+			input = {
+				keys = {
+					["<Down>"] = { "menu_down", mode = { "i", "n" } },
+					["<C-n>"] = { "menu_down", mode = { "i", "n" } },
+					["<Up>"] = { "menu_up", mode = { "i", "n" } },
+					["<C-p>"] = { "menu_up", mode = { "i", "n" } },
 				},
-			}),
-			{
-				prompt_title = "Airtable record",
-				finder = finders.new_table({
-					results = menu_items,
-					entry_maker = function(item)
-						local is_separator = item[2] == MENU_SEPARATOR
-						return {
-							value = item,
-							-- empty ordinal: separator never matches search input
-							ordinal = is_separator and "" or item[1],
-							display = function(entry)
-								local hl = is_separator and "Comment" or "Normal"
-								return entry.value[1], { { { 0, #entry.value[1] }, hl } }
-							end,
-						}
-					end,
-				}),
-				sorter = telescope_config.values.generic_sorter({}),
-				attach_mappings = function(prompt_bufnr, map)
-					-- Skip separator rows when moving the selection so they can't be landed on.
-					local function skip_separators(move)
-						return function()
-							move(prompt_bufnr)
-							local guard = 0
-							while
-								action_state.get_selected_entry().value[2] == MENU_SEPARATOR and guard < #menu_items
-							do
-								move(prompt_bufnr)
-								guard = guard + 1
-							end
-						end
-					end
-					map({ "i", "n" }, "<Down>", skip_separators(actions.move_selection_next))
-					map({ "i", "n" }, "<C-n>", skip_separators(actions.move_selection_next))
-					map({ "i", "n" }, "<Up>", skip_separators(actions.move_selection_previous))
-					map({ "i", "n" }, "<C-p>", skip_separators(actions.move_selection_previous))
-
-					actions.select_default:replace(function()
-						local selection = action_state.get_selected_entry()
-						local action = selection.value[2]
-						if action == MENU_SEPARATOR then
-							return
-						end
-						actions.close(prompt_bufnr)
-						run_action(action)
-					end)
-					return true
-				end,
-			}
-		)
-		:find()
+			},
+			list = {
+				keys = {
+					["<Down>"] = "menu_down",
+					["<C-n>"] = "menu_down",
+					["<Up>"] = "menu_up",
+					["<C-p>"] = "menu_up",
+				},
+			},
+		},
+		actions = {
+			menu_down = function(picker)
+				move_skipping_separator(picker, 1)
+			end,
+			menu_up = function(picker)
+				move_skipping_separator(picker, -1)
+			end,
+		},
+		confirm = function(picker, item)
+			-- Separators are inert: ignore the selection and keep the picker open.
+			if not item or item.action == MENU_SEPARATOR then
+				return
+			end
+			picker:close()
+			run_action(item.action)
+		end,
+	})
 end
 
 ---@return string?
