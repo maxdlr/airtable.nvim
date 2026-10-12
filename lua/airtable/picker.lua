@@ -312,6 +312,9 @@ function M.pick(picker, fetch_records)
 	snacks_picker = Snacks.picker.pick({
 		title = picker.name,
 		show_empty = false,
+		-- Opening a record's action menu or an edit picker/window on top of this one
+		-- would otherwise close it on focus change, forcing a refetch every time.
+		auto_close = false,
 		format = function(item)
 			return make_display(item.record, picker)
 		end,
