@@ -16,6 +16,7 @@ Airtable URL, and optional safe editing of specific fields you explicitly config
 - Neovim ≥ 0.10
 - [plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
 - [snacks.nvim](https://github.com/folke/snacks.nvim)
+- [honcho.nvim](https://github.com/maxdlr/honcho.nvim)
 
 ## Installation
 
@@ -26,6 +27,7 @@ Airtable URL, and optional safe editing of specific fields you explicitly config
 vim.pack.add({
   'https://github.com/nvim-lua/plenary.nvim',
   'https://github.com/folke/snacks.nvim',
+  'https://github.com/maxdlr/honcho.nvim',
   'https://github.com/maxdlr/airtable.nvim',
 })
 ```
@@ -38,7 +40,7 @@ vim.pack.add({
 ```lua
 {
   'you/airtable.nvim',
-  dependencies = { 'nvim-lua/plenary.nvim', 'folke/snacks.nvim' },
+  dependencies = { 'nvim-lua/plenary.nvim', 'folke/snacks.nvim', 'maxdlr/honcho.nvim' },
   opts = { --[[ see Configuration below ]] },
 }
 ```
@@ -51,7 +53,7 @@ vim.pack.add({
 ```lua
 use({
   'you/airtable.nvim',
-  requires = { 'nvim-lua/plenary.nvim', 'folke/snacks.nvim' },
+  requires = { 'nvim-lua/plenary.nvim', 'folke/snacks.nvim', 'maxdlr/honcho.nvim' },
   config = function() require('airtable').setup({ --[[ see Configuration below ]] }) end,
 })
 ```

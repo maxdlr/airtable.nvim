@@ -192,6 +192,151 @@ local function make_item(record, picker)
 	}
 end
 
+-- Resolves the buffer.editable entry for the "status" field (buffer.fields key =
+-- "status", type = "select"), if configured. Returns nil if there's no such field —
+-- the "Select status" action is then simply omitted from the record menu.
+---@return AirtableEditableField?
+local function status_editable_entry()
+	local status_field = view.find_buffer_field("status")
+	if not status_field then
+		return nil
+	end
+	for _, entry in ipairs(config.options.buffer.editable or {}) do
+		if entry.field == status_field.field and entry.type == "select" then
+			return entry
+		end
+	end
+	return nil
+end
+
+-- Updates a result_line item's displayed record in place after an edit, so the row
+-- reflects the new value without re-fetching the whole picker.
+---@param snacks_picker snacks.Picker
+---@param item snacks.picker.Item
+local function apply_updated_record(snacks_picker, item, updated_record)
+	item.record = updated_record
+	snacks_picker.list:update({ force = true })
+end
+
+-- Opens the per-record action menu (honcho.nvim) for the item under the cursor.
+-- Every action except "Open record in buffer" keeps the record-list picker open —
+-- closing and refetching the whole list for a URL copy or a status change would be
+-- wasteful and lose the user's scroll position/search.
+---@param snacks_picker snacks.Picker
+---@param item snacks.picker.Item
+local function open_record_action_menu(snacks_picker, item)
+	local record = item.record
+	local notify = require("airtable.notify").notify
+	local honcho = require("honcho")
+
+	local commands = {
+		{
+			label = "Open record in buffer",
+			action = function()
+				snacks_picker:close()
+				view.open(record.id)
+			end,
+		},
+		{
+			label = "Open record in browser",
+			action = function()
+				api.record_url(record.id, function(url, err)
+					if err then
+						notify(err.category, err.message, vim.log.levels.ERROR)
+						return
+					end
+					vim.ui.open(url)
+				end)
+			end,
+		},
+		{
+			label = "Copy URL",
+			action = function()
+				api.record_url(record.id, function(url, err)
+					if err then
+						notify(err.category, err.message, vim.log.levels.ERROR)
+						return
+					end
+					vim.fn.setreg("+", url)
+					notify("Copied", "record URL copied to clipboard", vim.log.levels.INFO)
+				end)
+			end,
+		},
+	}
+
+	local status_entry = status_editable_entry()
+	if status_entry then
+		table.insert(commands, {
+			label = "Select status",
+			action = function()
+				require("airtable.edit").edit_select(record.id, status_entry.field, function(updated_record)
+					apply_updated_record(snacks_picker, item, updated_record)
+				end)
+			end,
+		})
+	end
+
+	honcho.honcho_picker("Record actions", commands)()
+end
+
+-- Small centered modal shown while fetch_records is in flight, so there's no
+-- half-loaded picker UI visible during the (sometimes multi-second) network fetch.
+---@return { close: fun() }
+local function show_loading_modal()
+	local buf = vim.api.nvim_create_buf(false, true)
+	vim.bo[buf].buftype = "nofile"
+	vim.bo[buf].bufhidden = "wipe"
+
+	local width, height = 12, 3
+	local win = vim.api.nvim_open_win(buf, false, {
+		relative = "editor",
+		width = width,
+		height = height,
+		row = math.floor((vim.o.lines - height) / 2),
+		col = math.floor((vim.o.columns - width) / 2),
+		border = "rounded",
+		style = "minimal",
+		focusable = false,
+		zindex = 250,
+	})
+	vim.wo[win].winhighlight = "NormalFloat:NormalFloat"
+
+	local timer = assert(vim.uv.new_timer())
+	timer:start(0, 80, function()
+		vim.schedule(function()
+			if not vim.api.nvim_win_is_valid(win) then
+				timer:stop()
+				timer:close()
+				return
+			end
+			local spinner = Snacks.util.spinner()
+			local line = string.rep(" ", math.max(0, math.floor((width - 2 - vim.fn.strdisplaywidth(spinner)) / 2)))
+				.. spinner
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "", line, "" })
+		end)
+	end)
+
+	local closed = false
+	return {
+		close = function()
+			if closed then
+				return
+			end
+			closed = true
+			timer:stop()
+			timer:close()
+			-- Deferred: close() can be invoked from fetch_records's callback, which may
+			-- fire from a fast-event context (e.g. directly inside the finder's async
+			-- coroutine for a synchronous callback) where window APIs aren't allowed.
+			vim.schedule(function()
+				if vim.api.nvim_win_is_valid(win) then
+					vim.api.nvim_win_close(win, true)
+				end
+			end)
+		end,
+	}
+end
+
 -- Opens the picker immediately with a "Loading…" title; Snacks' async finder populates
 -- items as fetch_records's callback fires, so the UI shows up right away instead of the
 -- whole command appearing to hang while the network request is in flight.
@@ -200,9 +345,11 @@ end
 function M.pick(picker, fetch_records)
 	local notify = require("airtable.notify").notify
 	local snacks_picker ---@type snacks.Picker?
+	local loading_modal = show_loading_modal()
 
 	snacks_picker = Snacks.picker.pick({
-		title = picker.name .. " (loading…)",
+		title = picker.name,
+		show_empty = false,
 		format = function(item)
 			return make_display(item.record, picker)
 		end,
@@ -225,6 +372,7 @@ function M.pick(picker, fetch_records)
 				local done = false
 
 				fetch_records(function(records, err)
+					loading_modal.close()
 					if err then
 						notify(err.category, err.message, vim.log.levels.ERROR)
 					elseif #records == 0 then
@@ -232,10 +380,6 @@ function M.pick(picker, fetch_records)
 					else
 						for _, record in ipairs(records) do
 							cb(make_item(record, picker))
-						end
-						if snacks_picker then
-							snacks_picker.title = picker.name
-							snacks_picker:update_titles()
 						end
 					end
 					done = true
@@ -250,9 +394,8 @@ function M.pick(picker, fetch_records)
 			end
 		end,
 		confirm = function(p, item)
-			p:close()
 			if item then
-				view.open(item.record.id)
+				open_record_action_menu(p, item)
 			end
 		end,
 	})

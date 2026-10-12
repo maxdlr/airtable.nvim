@@ -230,8 +230,6 @@ local function refresh_buffer(buf, record)
 	buf_line_to_key[buf] = line_to_key
 end
 
-local MENU_SEPARATOR = false
-
 ---@param buf integer
 ---@param record_id string
 ---@param entry AirtableEditableField
@@ -257,131 +255,76 @@ local function start_edit(buf, record_id, entry)
 	end
 end
 
--- Built as a real picker (not vim.ui.select) so the separator between built-in and
--- edit actions renders consistently (dimmed, unselectable) regardless of the user's
--- vim.ui.select backend.
+-- Built on honcho.nvim's command picker, which already handles the dimmed/
+-- unselectable separator row and skip-navigation.
 ---@param buf integer
 ---@param record_id string
 local function open_context_menu(buf, record_id)
 	local editable = config.options.buffer.editable or {}
+	local honcho = require("honcho")
 
-	---@type { label: string, text: string, action: string|table|false }[]
-	local menu_items = {
-		{ label = "Open in browser", text = "Open in browser", action = "open_in_browser" },
-		{ label = "Browse comments", text = "Browse comments", action = "browse_comments" },
-		{ label = "Copy record URL", text = "Copy record URL", action = "copy_url" },
-		{ label = "Refresh", text = "Refresh", action = "refresh" },
+	local commands = {
+		{
+			label = "Open in browser",
+			action = function()
+				api.record_url(record_id, function(url, err)
+					if err then
+						notify(err.category, err.message, vim.log.levels.ERROR)
+						return
+					end
+					vim.ui.open(url)
+				end)
+			end,
+		},
+		{
+			label = "Browse comments",
+			action = function()
+				require("airtable.comments").pick(record_id)
+			end,
+		},
+		{
+			label = "Copy record URL",
+			action = function()
+				api.record_url(record_id, function(url, err)
+					if err then
+						notify(err.category, err.message, vim.log.levels.ERROR)
+						return
+					end
+					vim.fn.setreg("+", url)
+					notify("Copied", "record URL copied to clipboard", vim.log.levels.INFO)
+				end)
+			end,
+		},
+		{
+			label = "Refresh",
+			action = function()
+				api.get_recordById(record_id, function(record, err)
+					if err then
+						notify(err.category, err.message, vim.log.levels.ERROR)
+						return
+					end
+					if vim.api.nvim_buf_is_valid(buf) then
+						refresh_buffer(buf, record)
+					end
+					notify("Refreshed", "record reloaded from Airtable", vim.log.levels.INFO)
+				end)
+			end,
+		},
 	}
 
 	if #editable > 0 then
-		-- Empty text: the separator never matches a search, same as it being unselectable.
-		table.insert(menu_items, { label = "───────────────", text = "", action = MENU_SEPARATOR })
+		table.insert(commands, { label = "───────────────", action = false })
 		for _, entry in ipairs(editable) do
-			local label = entry.name or ("Edit " .. entry.field)
-			table.insert(menu_items, { label = label, text = label, action = entry })
+			table.insert(commands, {
+				label = entry.name or ("Edit " .. entry.field),
+				action = function()
+					start_edit(buf, record_id, entry)
+				end,
+			})
 		end
 	end
 
-	local function run_action(action)
-		if action == "open_in_browser" then
-			api.record_url(record_id, function(url, err)
-				if err then
-					notify(err.category, err.message, vim.log.levels.ERROR)
-					return
-				end
-				vim.ui.open(url)
-			end)
-		elseif action == "browse_comments" then
-			require("airtable.comments").pick(record_id)
-		elseif action == "copy_url" then
-			api.record_url(record_id, function(url, err)
-				if err then
-					notify(err.category, err.message, vim.log.levels.ERROR)
-					return
-				end
-				vim.fn.setreg("+", url)
-				notify("Copied", "record URL copied to clipboard", vim.log.levels.INFO)
-			end)
-		elseif action == "refresh" then
-			api.get_recordById(record_id, function(record, err)
-				if err then
-					notify(err.category, err.message, vim.log.levels.ERROR)
-					return
-				end
-				if vim.api.nvim_buf_is_valid(buf) then
-					refresh_buffer(buf, record)
-				end
-				notify("Refreshed", "record reloaded from Airtable", vim.log.levels.INFO)
-			end)
-		elseif type(action) == "table" then
-			start_edit(buf, record_id, action)
-		end
-	end
-
-	-- Skips over the separator row when moving the selection, so it can never be
-	-- landed on (and therefore never look "selectable").
-	---@param step integer
-	local function move_skipping_separator(picker, step)
-		picker.list:move(step)
-		local guard = 0
-		local current = picker:current({ resolve = false })
-		while current and current.action == MENU_SEPARATOR and guard < #menu_items do
-			picker.list:move(step)
-			current = picker:current({ resolve = false })
-			guard = guard + 1
-		end
-	end
-
-	Snacks.picker.pick({
-		title = "Airtable record",
-		items = menu_items,
-		format = function(item)
-			local is_separator = item.action == MENU_SEPARATOR
-			return { { item.label, is_separator and "Comment" or "Normal" } }
-		end,
-		layout = {
-			preset = "select",
-			layout = {
-				width = math.max(40, math.floor(vim.o.columns * 0.25)),
-				min_width = 40,
-				max_height = #menu_items + 4,
-			},
-		},
-		win = {
-			input = {
-				keys = {
-					["<Down>"] = { "menu_down", mode = { "i", "n" } },
-					["<C-n>"] = { "menu_down", mode = { "i", "n" } },
-					["<Up>"] = { "menu_up", mode = { "i", "n" } },
-					["<C-p>"] = { "menu_up", mode = { "i", "n" } },
-				},
-			},
-			list = {
-				keys = {
-					["<Down>"] = "menu_down",
-					["<C-n>"] = "menu_down",
-					["<Up>"] = "menu_up",
-					["<C-p>"] = "menu_up",
-				},
-			},
-		},
-		actions = {
-			menu_down = function(picker)
-				move_skipping_separator(picker, 1)
-			end,
-			menu_up = function(picker)
-				move_skipping_separator(picker, -1)
-			end,
-		},
-		confirm = function(picker, item)
-			-- Separators are inert: ignore the selection and keep the picker open.
-			if not item or item.action == MENU_SEPARATOR then
-				return
-			end
-			picker:close()
-			run_action(item.action)
-		end,
-	})
+	honcho.honcho_picker("Airtable record", commands)()
 end
 
 ---@return string?
