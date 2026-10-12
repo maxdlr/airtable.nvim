@@ -96,6 +96,7 @@ function M.edit_text(record_id, field, current_value, on_updated, on_closed)
     title = string.format(' Edit %s (<C-CR> to save, q to cancel) ', field),
     title_pos = 'center',
     style = 'minimal',
+    zindex = 250, -- above Snacks picker windows (zindex 50)
   })
 
   local function close_win()
