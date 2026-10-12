@@ -38,6 +38,23 @@ function M.edit_select(record_id, field, on_updated)
         preset = 'select',
         layout = { width = width, min_width = width, max_width = width, max_height = height },
       },
+      on_show = function(picker)
+        -- Retries startinsert until the input window is actually focused, since a
+        -- single call can race with a parent picker's close() and get dropped.
+        local attempts = 0
+        local function try_insert()
+          attempts = attempts + 1
+          if not picker.input or not picker.input.win:valid() then
+            return
+          end
+          if vim.api.nvim_get_current_win() == picker.input.win.win then
+            vim.cmd('startinsert!')
+          elseif attempts < 10 then
+            vim.defer_fn(try_insert, 20)
+          end
+        end
+        vim.schedule(try_insert)
+      end,
       confirm = function(picker, item)
         picker:close()
         if not item then return end

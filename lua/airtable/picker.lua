@@ -176,22 +176,6 @@ local function make_item(record, picker)
 	}
 end
 
--- "Select status" only appears if buffer.editable has a select-type entry for the
--- field mapped to the "status" key.
----@return AirtableEditableField?
-local function status_editable_entry()
-	local status_field = view.find_buffer_field("status")
-	if not status_field then
-		return nil
-	end
-	for _, entry in ipairs(config.options.buffer.editable or {}) do
-		if entry.field == status_field.field and entry.type == "select" then
-			return entry
-		end
-	end
-	return nil
-end
-
 ---@param snacks_picker snacks.Picker
 ---@param item snacks.picker.Item
 local function apply_updated_record(snacks_picker, item, updated_record)
@@ -242,14 +226,21 @@ local function open_record_action_menu(snacks_picker, item)
 		},
 	}
 
-	local status_entry = status_editable_entry()
-	if status_entry then
+	for _, entry in ipairs(config.options.buffer.editable or {}) do
 		table.insert(commands, {
-			label = "Select status",
+			label = entry.name or ("Edit " .. entry.field),
 			action = function()
-				require("airtable.edit").edit_select(record.id, status_entry.field, function(updated_record)
+				local edit = require("airtable.edit")
+				local on_updated = function(updated_record)
 					apply_updated_record(snacks_picker, item, updated_record)
-				end)
+				end
+
+				if entry.type == "select" then
+					edit.edit_select(record.id, entry.field, on_updated)
+				elseif entry.type == "text" then
+					local current_value = format_field(record.fields[entry.field])
+					edit.edit_text(record.id, entry.field, current_value, on_updated)
+				end
 			end,
 		})
 	end

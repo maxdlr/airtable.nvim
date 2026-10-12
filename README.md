@@ -318,8 +318,9 @@ feature-flag-xyz         " matches only if it's in the visible row
 ```
 
 Pressing `<CR>` on a record opens an action menu: open in buffer, open in browser, copy
-URL, and (if a select-type `buffer.editable` entry exists for the status field) select a
-new status directly. Every action keeps the picker open except opening in a buffer.
+URL, and an "Edit `<field>`" action for every `buffer.editable` entry (same choices/text
+flow as the record buffer below). Every action keeps the picker open except opening in a
+buffer.
 
 Inside a record buffer, press `<CR>` for quick actions: open in browser, browse comments,
 copy the record's URL, refresh the buffer, or edit a field (if `buffer.editable` is
