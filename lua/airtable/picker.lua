@@ -285,7 +285,7 @@ local function show_loading_modal()
 				return
 			end
 			local spinner = Snacks.util.spinner()
-			local line = string.rep(" ", math.max(0, math.floor((width - 2 - vim.fn.strdisplaywidth(spinner)) / 2)))
+			local line = string.rep(" ", math.max(0, math.floor((width - 1 - vim.fn.strdisplaywidth(spinner)) / 2)))
 				.. spinner
 			vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "", line, "" })
 		end)
@@ -339,7 +339,11 @@ function M.pick(picker, fetch_records)
 					if err then
 						notify(err.category, err.message, vim.log.levels.ERROR)
 					elseif #records == 0 then
-						notify("No Records", string.format('no records for picker "%s"', picker.name), vim.log.levels.INFO)
+						notify(
+							"No Records",
+							string.format('no records for picker "%s"', picker.name),
+							vim.log.levels.INFO
+						)
 					else
 						for _, record in ipairs(records) do
 							cb(make_item(record, picker))
