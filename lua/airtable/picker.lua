@@ -183,13 +183,19 @@ local function apply_updated_record(snacks_picker, item, updated_record)
 	snacks_picker.list:update({ force = true })
 end
 
--- All actions except opening the record buffer keep the list picker open.
+-- All actions but opening the record buffer keep the list open and refocus it after.
 ---@param snacks_picker snacks.Picker
 ---@param item snacks.picker.Item
 local function open_record_action_menu(snacks_picker, item)
 	local record = item.record
 	local notify = require("airtable.notify").notify
 	local honcho = require("honcho")
+
+	local function refocus()
+		if snacks_picker and not snacks_picker.closed then
+			snacks_picker:focus()
+		end
+	end
 
 	local commands = {
 		{
@@ -208,6 +214,7 @@ local function open_record_action_menu(snacks_picker, item)
 						return
 					end
 					vim.ui.open(url)
+					refocus()
 				end)
 			end,
 		},
@@ -221,6 +228,7 @@ local function open_record_action_menu(snacks_picker, item)
 					end
 					vim.fn.setreg("+", url)
 					notify("Copied", "record URL copied to clipboard", vim.log.levels.INFO)
+					refocus()
 				end)
 			end,
 		},
@@ -236,10 +244,10 @@ local function open_record_action_menu(snacks_picker, item)
 				end
 
 				if entry.type == "select" then
-					edit.edit_select(record.id, entry.field, on_updated)
+					edit.edit_select(record.id, entry.field, on_updated, refocus)
 				elseif entry.type == "text" then
 					local current_value = format_field(record.fields[entry.field])
-					edit.edit_text(record.id, entry.field, current_value, on_updated)
+					edit.edit_text(record.id, entry.field, current_value, on_updated, refocus)
 				end
 			end,
 		})
@@ -312,8 +320,7 @@ function M.pick(picker, fetch_records)
 	snacks_picker = Snacks.picker.pick({
 		title = picker.name,
 		show_empty = false,
-		-- Opening a record's action menu or an edit picker/window on top of this one
-		-- would otherwise close it on focus change, forcing a refetch every time.
+		-- otherwise closes on focus change when a sub-picker/edit window opens on top
 		auto_close = false,
 		format = function(item)
 			return make_display(item.record, picker)

@@ -3,7 +3,8 @@ local notify = require('airtable.notify').notify
 
 local M = {}
 
-function M.edit_select(record_id, field, on_updated)
+---@param on_closed? fun() Called once the picker closes, whether confirmed or cancelled.
+function M.edit_select(record_id, field, on_updated, on_closed)
   api.get_field_choices(field, function(choices, err)
     if err then
       notify(err.category, err.message, vim.log.levels.ERROR)
@@ -55,6 +56,7 @@ function M.edit_select(record_id, field, on_updated)
         end
         vim.schedule(try_insert)
       end,
+      on_close = on_closed,
       confirm = function(picker, item)
         picker:close()
         if not item then return end
@@ -73,7 +75,8 @@ function M.edit_select(record_id, field, on_updated)
 end
 
 -- Not wired to :w/:wa/BufWriteCmd — <C-CR> is the only way to save; q discards.
-function M.edit_text(record_id, field, current_value, on_updated)
+---@param on_closed? fun() Called once the window closes, whether saved or cancelled.
+function M.edit_text(record_id, field, current_value, on_updated, on_closed)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(current_value, '\n', { plain = true }))
   vim.bo[buf].buftype = 'nofile'
@@ -95,6 +98,13 @@ function M.edit_text(record_id, field, current_value, on_updated)
     style = 'minimal',
   })
 
+  local function close_win()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+    if on_closed then on_closed() end
+  end
+
   local function save()
     local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
     local new_value = table.concat(lines, '\n')
@@ -105,19 +115,13 @@ function M.edit_text(record_id, field, current_value, on_updated)
         return
       end
       notify('Updated', string.format('%s saved', field), vim.log.levels.INFO)
-      if vim.api.nvim_win_is_valid(win) then
-        vim.api.nvim_win_close(win, true)
-      end
+      close_win()
       on_updated(record)
     end)
   end
 
   vim.keymap.set({ 'n', 'i' }, '<C-CR>', save, { buffer = buf, desc = 'Save edit' })
-  vim.keymap.set('n', 'q', function()
-    if vim.api.nvim_win_is_valid(win) then
-      vim.api.nvim_win_close(win, true)
-    end
-  end, { buffer = buf, desc = 'Cancel edit' })
+  vim.keymap.set('n', 'q', close_win, { buffer = buf, desc = 'Cancel edit' })
 end
 
 return M
