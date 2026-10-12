@@ -265,18 +265,20 @@ end
 local function open_context_menu(buf, record_id)
 	local editable = config.options.buffer.editable or {}
 
-	---@type { label: string, action: string|table|false }[]
+	---@type { label: string, text: string, action: string|table|false }[]
 	local menu_items = {
-		{ label = "Open in browser", action = "open_in_browser" },
-		{ label = "Browse comments", action = "browse_comments" },
-		{ label = "Copy record URL", action = "copy_url" },
-		{ label = "Refresh", action = "refresh" },
+		{ label = "Open in browser", text = "Open in browser", action = "open_in_browser" },
+		{ label = "Browse comments", text = "Browse comments", action = "browse_comments" },
+		{ label = "Copy record URL", text = "Copy record URL", action = "copy_url" },
+		{ label = "Refresh", text = "Refresh", action = "refresh" },
 	}
 
 	if #editable > 0 then
-		table.insert(menu_items, { label = "───────────────", action = MENU_SEPARATOR })
+		-- Empty text: the separator never matches a search, same as it being unselectable.
+		table.insert(menu_items, { label = "───────────────", text = "", action = MENU_SEPARATOR })
 		for _, entry in ipairs(editable) do
-			table.insert(menu_items, { label = entry.name or ("Edit " .. entry.field), action = entry })
+			local label = entry.name or ("Edit " .. entry.field)
+			table.insert(menu_items, { label = label, text = label, action = entry })
 		end
 	end
 
