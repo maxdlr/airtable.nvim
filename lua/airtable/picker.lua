@@ -5,18 +5,14 @@ local format_field = api.format_field
 
 local M = {}
 
--- Default hl by section position when a result_line entry omits `hl`.
 local DEFAULT_HL_BY_POSITION = {
 	"SnacksPickerIdentifier",
 	"SnacksPickerSpecial",
 }
 local DEFAULT_HL_FALLBACK = "SnacksPickerComment"
 
--- hex color -> generated highlight group name, so repeated colors don't redefine the group.
 local hex_hl_cache = {}
 
--- hl accepts: nil (position-based default), a group name/hex color, or a list of
--- { value, color } rules (first exact match on `text` wins, else the default).
 ---@param hl string|{value: string, color: string}[]|nil
 ---@param position integer
 ---@param text string?
@@ -50,7 +46,6 @@ local function resolve_hl(hl, position, text)
 	return group
 end
 
--- Ordinal for fuzzy matching, built from all result_line sections (not just the first).
 local function ordinal_text(record, result_line)
 	local parts = {}
 	for _, section in ipairs(result_line) do
@@ -62,11 +57,8 @@ local function ordinal_text(record, result_line)
 	return table.concat(parts, " ")
 end
 
--- Prefix that switches from "fuzzy match the visible row" to "substring search across
--- every buffer.fields value" (description, notes, etc).
 local DEEP_SEARCH_PREFIX = "--"
 
--- Cached per-record (on the item) since field values don't change during a session.
 local function deep_search_text(record)
 	local parts = {}
 	for _, entry in ipairs(config.options.buffer.fields) do
@@ -78,10 +70,8 @@ local function deep_search_text(record)
 	return table.concat(parts, " "):lower()
 end
 
--- Patches the *actual* matcher instance's `match` method in place rather than wrapping
--- it: Snacks drives matching through this one object per picker (same reasoning as the
--- old Telescope sorter patch — replacing the instance instead of patching it in place
--- would desync it from whatever internal state/lifecycle Snacks manages on it).
+-- Patches the matcher instance's match method in place instead of wrapping it, since
+-- Snacks drives matching through this exact object per picker.
 ---@param picker snacks.Picker
 local function patch_matcher_for_deep_search(picker)
 	local matcher = picker.matcher
@@ -107,8 +97,6 @@ local function patch_matcher_for_deep_search(picker)
 	end
 end
 
--- Leading icon (from result_line_prefix) + one section per result_line entry, separated
--- by " • ". Missing fields render as "—".
 ---@param record AirtableRecord
 ---@param picker AirtablePicker
 ---@return snacks.picker.Highlight[]
@@ -127,7 +115,6 @@ local function make_display(record, picker)
 	for i, section in ipairs(picker.result_line) do
 		local text = format_field(record.fields[section.field])
 		if text ~= "" then
-			-- explicit date_format wins; else auto-detect, default to date-only in picker rows
 			local mode = section.date_format or (api.looks_like_date(text) and "date" or nil)
 			if mode then
 				text = api.format_date(text, mode)
@@ -149,7 +136,6 @@ local function make_display(record, picker)
 	return chunks
 end
 
--- buffer.fields keys already shown in result_line, so the preview doesn't repeat them.
 local function buffer_keys_shown_in_result_line(result_line)
 	local shown_field_names = {}
 	for _, section in ipairs(result_line) do
@@ -165,8 +151,6 @@ local function buffer_keys_shown_in_result_line(result_line)
 	return exclude
 end
 
--- Renders buffer.fields (minus what result_line already shows) using data already
--- fetched by the picker — no extra request per preview.
 ---@param result_line AirtableResultSection[]
 ---@return fun(ctx: snacks.picker.preview.ctx)
 local function make_previewer(result_line)
@@ -192,9 +176,8 @@ local function make_item(record, picker)
 	}
 end
 
--- Resolves the buffer.editable entry for the "status" field (buffer.fields key =
--- "status", type = "select"), if configured. Returns nil if there's no such field —
--- the "Select status" action is then simply omitted from the record menu.
+-- "Select status" only appears if buffer.editable has a select-type entry for the
+-- field mapped to the "status" key.
 ---@return AirtableEditableField?
 local function status_editable_entry()
 	local status_field = view.find_buffer_field("status")
@@ -209,8 +192,6 @@ local function status_editable_entry()
 	return nil
 end
 
--- Updates a result_line item's displayed record in place after an edit, so the row
--- reflects the new value without re-fetching the whole picker.
 ---@param snacks_picker snacks.Picker
 ---@param item snacks.picker.Item
 local function apply_updated_record(snacks_picker, item, updated_record)
@@ -218,10 +199,7 @@ local function apply_updated_record(snacks_picker, item, updated_record)
 	snacks_picker.list:update({ force = true })
 end
 
--- Opens the per-record action menu (honcho.nvim) for the item under the cursor.
--- Every action except "Open record in buffer" keeps the record-list picker open —
--- closing and refetching the whole list for a URL copy or a status change would be
--- wasteful and lose the user's scroll position/search.
+-- All actions except opening the record buffer keep the list picker open.
 ---@param snacks_picker snacks.Picker
 ---@param item snacks.picker.Item
 local function open_record_action_menu(snacks_picker, item)
@@ -279,8 +257,6 @@ local function open_record_action_menu(snacks_picker, item)
 	honcho.honcho_picker("Record actions", commands)()
 end
 
--- Small centered modal shown while fetch_records is in flight, so there's no
--- half-loaded picker UI visible during the (sometimes multi-second) network fetch.
 ---@return { close: fun() }
 local function show_loading_modal()
 	local buf = vim.api.nvim_create_buf(false, true)
@@ -325,9 +301,7 @@ local function show_loading_modal()
 			closed = true
 			timer:stop()
 			timer:close()
-			-- Deferred: close() can be invoked from fetch_records's callback, which may
-			-- fire from a fast-event context (e.g. directly inside the finder's async
-			-- coroutine for a synchronous callback) where window APIs aren't allowed.
+			-- close() may run from fetch_records's callback in a fast-event context.
 			vim.schedule(function()
 				if vim.api.nvim_win_is_valid(win) then
 					vim.api.nvim_win_close(win, true)
@@ -337,9 +311,6 @@ local function show_loading_modal()
 	}
 end
 
--- Opens the picker immediately with a "Loading…" title; Snacks' async finder populates
--- items as fetch_records's callback fires, so the UI shows up right away instead of the
--- whole command appearing to hang while the network request is in flight.
 ---@param picker AirtablePicker
 ---@param fetch_records fun(callback: fun(records: AirtableRecord[]?, err: AirtableError?))
 function M.pick(picker, fetch_records)
@@ -356,18 +327,9 @@ function M.pick(picker, fetch_records)
 		preview = make_previewer(picker.result_line),
 		finder = function(_, _)
 			return function(cb)
-				-- Bridges fetch_records's async callback (network I/O via plenary.curl,
-				-- itself vim.schedule_wrap'd) into Snacks' coroutine-based finder: capture
-				-- the running async task, suspend it, and resume it once the real callback
-				-- fires — same pattern Snacks' own proc.lua source uses for libuv callbacks.
-				-- A plain vim.wait busy-loop here would be unsafe: this function runs inside
-				-- a coroutine driven by Snacks' own scheduler, and re-entering the event loop
-				-- from inside it isn't a supported bridge point.
-				--
-				-- fetch_records's callback could in principle fire synchronously (before
-				-- suspend() below ever runs) — resume() is a no-op if called before the
-				-- matching suspend(), which would permanently stall the finder. Guard
-				-- against that ordering with a flag instead of assuming async timing.
+				-- Bridges fetch_records's async callback into Snacks' coroutine-based
+				-- finder via suspend/resume, same pattern as Snacks' own proc.lua source.
+				-- Guarded with `done` since the callback could fire before suspend() runs.
 				local async = require("snacks.picker.util.async").running()
 				local done = false
 

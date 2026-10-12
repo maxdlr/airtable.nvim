@@ -28,8 +28,6 @@ function M.find_buffer_field(key)
 	return nil
 end
 
--- Plain buffer character (not a sign/statuscolumn) so it renders the same in a real
--- buffer and in the picker's previewer. Overridable via buffer.style.section_border_character.
 local DEFAULT_LEFT_BORDER = "▌ "
 local LEFT_BORDER_HL = "Comment"
 local DEFAULT_EDITABLE_BORDER_COLOR = "#FFA500"
@@ -88,11 +86,6 @@ local function pill_line_chunks(heading, text, border, border_hl)
 	return { { border, border_hl }, { heading .. ": " .. text, "Normal" } }
 end
 
--- Builds markdown lines + extmark specs for a record from buffer.fields, in config
--- order (the "title" key becomes the H1 heading regardless of position).
--- opts.exclude: keys to omit (already shown elsewhere, e.g. a picker's result_line).
--- opts.skip_missing: omit absent fields instead of rendering "_Empty._" (for previews
--- built from list data, where absence just means "not fetched").
 ---@param record AirtableRecord
 ---@return string[] lines
 ---@return { line: integer, col: integer, opts: table }[] extmarks
@@ -134,7 +127,6 @@ local function render_buffer(record, opts)
 
 		local text = format_field(raw_value)
 		if text ~= "" then
-			-- explicit date_format wins; else auto-detect ISO-8601, default to full datetime here
 			local mode = entry.date_format or (api.looks_like_date(text) and "datetime" or nil)
 			if mode then
 				text = api.format_date(text, mode)
@@ -209,7 +201,6 @@ local function render_buffer(record, opts)
 end
 M.render_buffer = render_buffer
 
--- Each extmark is individually pcall-guarded so one bad spec can't break the rest.
 function M.apply_extmarks(buf, extmarks)
 	for _, mark in ipairs(extmarks) do
 		pcall(vim.api.nvim_buf_set_extmark, buf, M.NAMESPACE, mark.line, mark.col, mark.opts)
@@ -255,8 +246,6 @@ local function start_edit(buf, record_id, entry)
 	end
 end
 
--- Built on honcho.nvim's command picker, which already handles the dimmed/
--- unselectable separator row and skip-navigation.
 ---@param buf integer
 ---@param record_id string
 local function open_context_menu(buf, record_id)
@@ -346,8 +335,6 @@ local function url_under_cursor()
 	return nil
 end
 
--- Closes any existing buffer for this record first, since nvim_buf_set_name errors
--- with "buffer already exists" when reopening the same record.
 ---@param record_id string
 function M.open(record_id)
 	notify("Loading", "fetching record...", vim.log.levels.INFO)
@@ -376,7 +363,7 @@ function M.open(record_id)
 		vim.bo[buf].bufhidden = "hide"
 		vim.bo[buf].swapfile = false
 		vim.bo[buf].filetype = "markdown"
-		vim.api.nvim_buf_set_name(buf, "Airtable  " .. buf_name)
+		vim.api.nvim_buf_set_name(buf, "Airtable  " .. buf_name)
 		refresh_buffer(buf, record)
 
 		vim.keymap.set("n", "<CR>", function()

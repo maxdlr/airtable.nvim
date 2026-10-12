@@ -19,8 +19,7 @@ function M.edit_select(record_id, field, on_updated)
     for _, choice in ipairs(choices) do
       longest = math.max(longest, #choice)
     end
-    -- Padding for borders/icons; capped so a handful of short choices doesn't look
-    -- cramped and a few long ones don't take over the screen.
+    -- Padding for borders; capped so short/long choice lists both look reasonable.
     local width = math.max(30, math.min(80, longest + 10))
     local height = math.max(5, math.min(15, #choices + 3))
 
@@ -56,9 +55,7 @@ function M.edit_select(record_id, field, on_updated)
   end)
 end
 
--- buftype=nofile (not acwrite): deliberately not wired to :w/:wa/BufWriteCmd, so
--- auto-save plugins reacting to InsertLeave/TextChanged/BufLeave can't trigger a
--- premature save. <C-CR> is the only way to save; :q discards changes.
+-- Not wired to :w/:wa/BufWriteCmd — <C-CR> is the only way to save; q discards.
 function M.edit_text(record_id, field, current_value, on_updated)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(current_value, '\n', { plain = true }))

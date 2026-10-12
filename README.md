@@ -78,7 +78,7 @@ the `data.records:read` scope, and grant it access to your base. If you configur
 
 <details>
 <summary><b>Default config</b> (click to expand)</summary>
-  
+
 ```lua
 require('airtable').setup({
   token_env = 'AIRTABLE_TOKEN',
@@ -87,51 +87,50 @@ require('airtable').setup({
   page_size = 20,
   default_filter = 'All records',
 
-buffer = {
-fields = {  
- { key = 'title', field = 'Title' },  
- { key = 'status', field = 'Status' },  
- { key = 'description', field = 'Description' },
-},
-},
+  buffer = {
+    fields = {
+      { key = 'title', field = 'Title' },
+      { key = 'status', field = 'Status' },
+      { key = 'description', field = 'Description' },
+    },
+  },
 
-pickers = {  
- {
-name = 'All records,  
- result_line = {  
- { field = 'Status' },  
- { field = 'Title' },
-{ field = 'Description' },
-},
-},
-},
+  pickers = {
+    {
+      name = 'All records',
+      result_line = {
+        { field = 'Status' },
+        { field = 'Title' },
+        { field = 'Description' },
+      },
+    },
+  },
 })
+```
 
-````
 </details>
 
-### Minimum config (to test out)
-If you're in a dev company team, there might hundreds of records you don't need to see to focus on your work.
-
-All Airtable fields are custom, most of the time, **so don't forget to rename them to match their exact names.**
-If you skip `pickers` entirely, `:Airtable` lists **every** record in `table_name`.
+### Minimum config
 
 ```lua
 require('airtable').setup({
-  token_env = 'AIRTABLE_TOKEN',    -- name of the env var holding your token (not the token itself)
- }
-),
-````
+  token_env = 'AIRTABLE_TOKEN', -- name of the env var holding your token (not the token itself)
+  base_id = 'appXXXXXXXXXXXXXX',
+  table_name = 'Tickets',
+})
+```
+
+If you skip `pickers` entirely, `:Airtable` lists every record in `table_name` — no
+filters required to get started.
+
+> Every field name above must match your Airtable base's actual column names exactly
+> (case-sensitive) — there's no universal default, since this varies by base.
 
 ### Recommended config
 
-- Define the fields you need in the `buffer`, to read the content you want.
-- Define only the `buffer.editable` fields you need to edit.
-- Define at least one default `picker` with filters to get only the ones you need to track.
-
 ```lua
 require('airtable').setup({
-  token_env = 'AIRTABLE_TOKEN',                       -- name of the env var holding your token (not the token itself)
+  token_env = 'AIRTABLE_TOKEN',
   base_id = 'appXXXXXXXXXXXXXX',                      -- your Airtable base id
   table_name = 'Tickets',                             -- exact table name (or its "tbl..." id) in that base
   page_size = 20,                                     -- records fetched per API page (Airtable max: 100)
@@ -141,11 +140,11 @@ require('airtable').setup({
     fields = {                                        -- rendered in this exact order when a record is opened
       { key = 'title', field = 'Title' },             -- key="title" is special: the H1 heading
       { key = 'status', field = 'Status' },           -- other keys become their own "## <Key>" section
-      { key = 'description', field = 'Description' }, -- ...
+      { key = 'description', field = 'Description' },
     },
 
-    -- Optional and off by default. Each entry adds an "Edit <field>" action to the
-    -- record view's <CR> menu. This is a WRITE operation, see "Editing fields" below.
+    -- Optional, off by default. Adds an "Edit <field>" action to the record view's
+    -- <CR> menu. This is a WRITE operation — see "Editing fields" below.
     editable = {
       { field = 'Status', type = 'select' },                       -- opens a picker of the field's choices
       { field = 'PR link', type = 'text', name = 'Edit PR link' }, -- opens a small editable buffer
@@ -170,12 +169,19 @@ require('airtable').setup({
 })
 ```
 
-> Every field name above must match your Airtable base's actual column names exactly
-> (case-sensitive).
-
 ### Record styling
 
-Colors adapt to your colorscheme and never break the render.
+Opening a record (and its picker preview) styles each `buffer.fields` entry based on
+its key name, no configuration needed:
+
+- Keys like `status`, `assignee`, `reviewer`, `type`, `priority`, or `label` render as a
+  colored pill — the color is derived deterministically from the field's value, so the
+  same value always gets the same color.
+- Keys like `name`, `title`, or `id` render with heading-style emphasis.
+- Everything else renders as plain text with a left border bar.
+
+Colors adapt to your colorscheme and never break the render — if a color can't be
+resolved for any reason, the plugin falls back to plain, unstyled text.
 
 <details>
 <summary><b>Advanced settings</b> (optional, click to expand)</summary>
@@ -183,9 +189,9 @@ Colors adapt to your colorscheme and never break the render.
 #### `buffer.style.section_border_character`: left border glyph
 
 Plain-style sections (heading + body) get a left border bar down the whole section.
-Defaults to `"▌"`; override it with any single character.
-Sections listed in `buffer.editable` get a distinct border color
-(default: orange, `"#FFA500"`), override it with `editable_section_border_color`:
+Defaults to `"▌"`; override it with any single character. Sections listed in
+`buffer.editable` get a distinct border color (default: orange, `"#FFA500"`), override
+with `editable_section_border_color`:
 
 ```lua
 buffer = {
@@ -213,11 +219,10 @@ pickers = {
       { field = 'Status' },
     },
     result_line_prefix = {
-      -- Condition uses the same shape as `filters`
+      -- condition uses the same shape as `filters`
       { '📝', { field = 'Status', value = 'In progress' } },
       { '▶️', { field = 'Status', value = 'To do' } },
-      { '✅', { field = 'Status', value = 'Done', only = true } }, -- only=true still works here
-
+      { '✅', { field = 'Status', value = 'Done', only = true } },
       -- icon can also be a table to color it: { icon = '...', color = <hl group or hex> }
       { { icon = '󰲶', color = '#FFFFFF' }, { field = 'Status', value = 'Blocked' } },
     },
@@ -243,22 +248,22 @@ result_line = {
 },
 ```
 
-#### `date_format`:
+#### `date_format`
 
 Add `date_format` explicitly to a `buffer.fields` or `result_line` entry to override the
-auto-detected default, e.g. to show only the time, or `date` in the buffer too:
+auto-detected default:
 
-| Value                               | Result             |
-| ----------------------------------- | ------------------ |
-| `date_format = 'datetime` (default) | 01/01/2026 - 21:09 |
-| `date_format = 'date` (default)     | 01/01/2026         |
-| `date_format = 'time` (default)     | 21:09              |
+| Value                                | Result             |
+| ------------------------------------- | ------------------ |
+| `date_format = 'datetime'` (default) | 01/01/2026 - 21:09 |
+| `date_format = 'date'` (default)     | 01/01/2026         |
+| `date_format = 'time'` (default)     | 21:09              |
 
 ```lua
 buffer = {
   fields = {
     { key = 'title', field = 'Title' },
-    { key = 'created_at', field = 'Created At', date_format = 'datetime' }, -- explicit, same as auto-detected default
+    { key = 'created_at', field = 'Created At', date_format = 'datetime' },
   },
 },
 pickers = {
@@ -274,8 +279,8 @@ pickers = {
 
 ##### `date_formats`: customizing the templates
 
-Override the display template for each mode globally, wherever `date_format` applies
-(explicit or auto-detected). Placeholders: `{DD}`, `{MM}`, `{YYYY}`, `{HH}`, `{mm}`.
+Override the display template for each mode globally. Placeholders: `{DD}`, `{MM}`,
+`{YYYY}`, `{HH}`, `{mm}`.
 
 ```lua
 require('airtable').setup({
@@ -302,35 +307,37 @@ require('airtable').setup({
 
 Typing in the picker fuzzy-matches the visible result line by default (title, status,
 whatever `result_line` shows). Prefix your query with `--` to instead search the full
-content of every `buffer.fields` value.
+content of every `buffer.fields` value — description, notes, anything not shown in the
+row — useful for finding a record by pasting a snippet, a feature flag name, or any text
+that only appears in a long field. Entirely local (no extra API calls): it searches the
+records already fetched for the current picker.
 
 ```
 feature-flag-xyz         " matches only if it's in the visible row
 --feature-flag-xyz       " matches anywhere in the record's configured fields
 ```
 
+Pressing `<CR>` on a record opens an action menu: open in buffer, open in browser, copy
+URL, and (if a select-type `buffer.editable` entry exists for the status field) select a
+new status directly. Every action keeps the picker open except opening in a buffer.
+
 Inside a record buffer, press `<CR>` for quick actions: open in browser, browse comments,
-copy the record's URL, refresh the buffer with the record's latest data, or edit a field
-(if `buffer.editable` is configured). With the cursor on a URL anywhere in the buffer,
-`o` opens it in your browser and `c` copies it. With the cursor on a section, `e` edits
-that field directly — same as the `<CR>` menu's "Edit" action, without the extra step.
-If the section isn't listed in `buffer.editable`, it toasts instead of editing.
+copy the record's URL, refresh the buffer, or edit a field (if `buffer.editable` is
+configured). With the cursor on a URL, `o` opens it and `c` copies it. With the cursor on
+a section, `e` edits that field directly, same as the `<CR>` menu's "Edit" action. If the
+section isn't listed in `buffer.editable`, it toasts instead of editing.
 
 ### Editing fields
 
 > **This writes to Airtable.** Only fields you explicitly list in `buffer.editable` can
-> ever be edited, nothing else in this plugin modifies your data.
+> ever be edited.
 
-Each `buffer.editable` entry adds an "Edit `<field>`" (or a custom `name`) action to the
-`<CR>` menu:
-
-- **`type = 'select'`** — opens a picker listing the field's valid choices
-  (fetched from Airtable). Pressing `<CR>` on a choice saves it immediately.
+- **`type = 'select'`** — opens a picker listing the field's valid choices. Pressing
+  `<CR>` on a choice saves it immediately.
 - **`type = 'text'`** — opens a large centered floating buffer prefilled with the
-  field's current value. Edit it like a normal buffer, then `<C-CR>` to save, or `q` to
-  discard your changes.
+  field's current value. `<C-CR>` saves, `q` discards.
 
-After a successful edit, the record buffer refreshes in place to show the new value.
+After a successful edit, the record buffer refreshes in place.
 
 ### Keymaps
 
@@ -343,6 +350,5 @@ vim.keymap.set('n', '<leader>ar', function() require('airtable').resume() end, {
 ## Scope
 
 - Read-only by default. The only write operation is editing a field you've explicitly
-  listed in `buffer.editable`, every other action (browsing, previewing, comments)
-  never modifies your data.
+  listed in `buffer.editable`.
 - No local caching — every command re-fetches from the API.

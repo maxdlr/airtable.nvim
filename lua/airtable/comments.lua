@@ -3,8 +3,7 @@ local notify = require('airtable.notify').notify
 
 local M = {}
 
--- Replaces @[user_id] mention tokens with @DisplayName via the comment's own
--- `mentioned` map. Unknown ids (e.g. deleted collaborator) are left as-is.
+-- Replaces @[user_id] with @DisplayName via the comment's mentioned map.
 local function resolve_mentions(text, mentioned)
   if not mentioned then return text end
   return (text:gsub('@%[([%w]+)%]', function(user_id)
@@ -41,7 +40,7 @@ local function preview_comment(ctx)
   vim.bo[ctx.buf].filetype = 'markdown'
 end
 
--- Airtable has no per-comment permalink, so selecting one copies the record's URL instead.
+-- No per-comment permalink in Airtable, so selecting one copies the record URL.
 function M.pick(record_id)
   api.list_record_comments(record_id, function(comments, err)
     if err then
