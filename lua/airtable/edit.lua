@@ -97,7 +97,7 @@ function M.edit_text(record_id, field, current_value, on_updated, on_closed)
 		row = math.floor((vim.o.lines - height) / 2),
 		col = math.floor((vim.o.columns - width) / 2),
 		border = "rounded",
-		title = string.format(" Edit %s (<C-CR> to save, q to cancel) ", field),
+		title = string.format("  %s (<C-CR> to save, q to cancel) ", field),
 		title_pos = "center",
 		style = "minimal",
 		zindex = 250, -- above Snacks picker windows (zindex 50)
