@@ -15,7 +15,7 @@ function M.edit_select(record_id, field, on_updated, on_closed)
 			return
 		end
 
-		local title = "Edit " .. field
+		local title = " " .. field
 		local longest = #title
 		for _, choice in ipairs(choices) do
 			longest = math.max(longest, #choice)

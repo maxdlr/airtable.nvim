@@ -305,7 +305,7 @@ local function open_context_menu(buf, record_id)
 		table.insert(commands, { label = "───────────────", action = false })
 		for _, entry in ipairs(editable) do
 			table.insert(commands, {
-				label = entry.name or ("Edit " .. entry.field),
+				label = entry.name or (" " .. entry.field),
 				action = function()
 					start_edit(buf, record_id, entry)
 				end,

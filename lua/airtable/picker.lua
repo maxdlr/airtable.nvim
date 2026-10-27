@@ -236,7 +236,7 @@ local function open_record_action_menu(snacks_picker, item)
 
 	for _, entry in ipairs(config.options.buffer.editable or {}) do
 		table.insert(commands, {
-			label = entry.name or ("Edit " .. entry.field),
+			label = entry.name or (" " .. entry.field),
 			action = function()
 				local edit = require("airtable.edit")
 				local on_updated = function(updated_record)
