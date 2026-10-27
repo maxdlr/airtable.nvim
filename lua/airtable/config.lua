@@ -19,7 +19,7 @@
 ---@field field string
 ---@field hl string|AirtableResultSectionColorRule[]|nil Group name, hex color, or
 ---  per-value color rules. Defaults by position if omitted.
----@field date_format 'datetime'|'date'|'time'|nil
+---@field date_format 'datetime'|'date'|'time'|'short_date'|nil
 
 ---@class AirtablePrefixIcon
 ---@field icon string
@@ -42,7 +42,7 @@
 ---@field key string Drives default styling (see `airtable.style.classify`).
 ---  `"title"` is special: rendered as the H1 heading.
 ---@field field string
----@field date_format 'datetime'|'date'|'time'|nil
+---@field date_format 'datetime'|'date'|'time'|'short_date'|nil
 
 ---@class AirtableBufferStyle
 ---@field section_border_character string? Left border character for plain-style
@@ -60,6 +60,10 @@
 ---@field datetime string? Placeholders: {DD} {MM} {YYYY} {HH} {mm}
 ---@field date string?
 ---@field time string?
+---@field short_date string? Used when the date's year matches the current year.
+---  Default: "{DD}/{MM}"
+---@field short_date_with_year string? Used when the date's year differs from the
+---  current year. Default: "{DD}/{MM}/{YYYY}"
 
 ---@class AirtableConfig
 ---@field token_env string Env var name holding the Airtable token
@@ -289,12 +293,13 @@ function M.setup(opts)
 			)
 		end
 		if
-			buffer_field.date_format and not vim.tbl_contains({ "datetime", "date", "time" }, buffer_field.date_format)
+			buffer_field.date_format
+			and not vim.tbl_contains({ "datetime", "date", "time", "short_date" }, buffer_field.date_format)
 		then
 			notify(
 				"Config Error",
 				string.format(
-					'"buffer.fields" entry "%s" has invalid date_format "%s" (expected "datetime", "date", or "time")',
+					'"buffer.fields" entry "%s" has invalid date_format "%s" (expected "datetime", "date", "time", or "short_date")',
 					tostring(buffer_field.key),
 					tostring(buffer_field.date_format)
 				),
@@ -328,11 +333,11 @@ function M.setup(opts)
 
 	if M.options.date_formats then
 		for mode, template in pairs(M.options.date_formats) do
-			if not vim.tbl_contains({ "datetime", "date", "time" }, mode) then
+			if not vim.tbl_contains({ "datetime", "date", "time", "short_date", "short_date_with_year" }, mode) then
 				notify(
 					"Config Error",
 					string.format(
-						'"date_formats" has unknown key "%s" (expected "datetime", "date", or "time")',
+						'"date_formats" has unknown key "%s" (expected "datetime", "date", "time", "short_date", or "short_date_with_year")',
 						tostring(mode)
 					),
 					vim.log.levels.ERROR

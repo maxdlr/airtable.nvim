@@ -44,6 +44,8 @@ local DEFAULT_DATE_TEMPLATES = {
 	datetime = "{DD}/{MM}/{YYYY} - {HH}:{mm}",
 	date = "{DD}/{MM}/{YYYY}",
 	time = "{HH}:{mm}",
+	short_date = "{DD}/{MM}",
+	short_date_with_year = "{DD}/{MM}/{YYYY}",
 }
 
 function M.looks_like_date(text)
@@ -51,15 +53,20 @@ function M.looks_like_date(text)
 end
 
 -- Non-matching text is returned unchanged rather than erroring.
----@param mode 'datetime'|'date'|'time'
+---@param mode 'datetime'|'date'|'time'|'short_date'
 function M.format_date(text, mode)
 	local year, month, day, hour, minute = text:match("^(%d%d%d%d)-(%d%d)-(%d%d)T(%d%d):(%d%d)")
 	if not year then
 		return text
 	end
 
-	local configured = config.options.date_formats and config.options.date_formats[mode]
-	local template = configured or DEFAULT_DATE_TEMPLATES[mode]
+	local resolved_mode = mode
+	if mode == "short_date" and year ~= os.date("%Y") then
+		resolved_mode = "short_date_with_year"
+	end
+
+	local configured = config.options.date_formats and config.options.date_formats[resolved_mode]
+	local template = configured or DEFAULT_DATE_TEMPLATES[resolved_mode]
 
 	return (template:gsub("{(%a+)}", {
 		DD = day,

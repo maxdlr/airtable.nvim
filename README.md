@@ -253,11 +253,12 @@ result_line = {
 Add `date_format` explicitly to a `buffer.fields` or `result_line` entry to override the
 auto-detected default:
 
-| Value                                | Result             |
-| ------------------------------------- | ------------------ |
-| `date_format = 'datetime'` (default) | 01/01/2026 - 21:09 |
-| `date_format = 'date'` (default)     | 01/01/2026         |
-| `date_format = 'time'` (default)     | 21:09              |
+| Value                                | Result                                                 |
+| ------------------------------------ | ------------------------------------------------------ |
+| `date_format = 'datetime'` (default) | 01/01/2026 - 21:09                                     |
+| `date_format = 'date'` (default)     | 01/01/2026                                             |
+| `date_format = 'time'` (default)     | 21:09                                                  |
+| `date_format = 'short_date'`         | 27/10, or 10/12/2025 if the year isn't the current one |
 
 ```lua
 buffer = {
@@ -289,6 +290,7 @@ require('airtable').setup({
     datetime = '{YYYY}-{MM}-{DD} {HH}h{mm}', -- default: '{DD}/{MM}/{YYYY} - {HH}:{mm}'
     date = '{YYYY}-{MM}-{DD}',               -- default: '{DD}/{MM}/{YYYY}'
     time = '{HH}h{mm}',                      -- default: '{HH}:{mm}'
+    short_date = '{DD}.{MM}',                -- default: '{DD}/{MM}'
   },
 })
 ```
