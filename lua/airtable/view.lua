@@ -111,7 +111,15 @@ local function render_buffer(record, opts)
 
 	local lines = { "# " .. title, "" }
 	local extmarks = {}
-	local line_to_key = {}
+	local line_to_key = { [0] = "title", [1] = "title" }
+
+	if is_editable_key("title") then
+		table.insert(extmarks, {
+			line = 0,
+			col = 0,
+			opts = { virt_text = { { left_border(), left_border_hl("title") } }, virt_text_pos = "inline" },
+		})
+	end
 
 	for _, entry in ipairs(fields) do
 		local key = entry.key
