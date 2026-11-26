@@ -143,12 +143,13 @@ require('airtable').setup({
       { key = 'description', field = 'Description' },
     },
 
-    -- Optional, off by default. Adds an "Edit <field>" action to the record view's
-    -- <CR> menu. This is a WRITE operation — see "Editing fields" below.
+    -- Optional, off by default. This is a WRITE operation — see "Editing fields" below.
     editable = {
-      { field = 'Status', type = 'select' },                       -- opens a picker of the field's choices
-      { field = 'PR link', type = 'text', name = 'Edit PR link' }, -- opens a small editable buffer
+      { field = 'Status', type = 'select' },                       -- pick from the field's choices
+      { field = 'PR link', type = 'text', name = 'Edit PR link' }, -- edit it directly in the buffer
     },
+
+    autosave = { enabled = true, debounce_ms = 1000 },  -- text edits save 1s after you stop typing
   },
 
   pickers = {                                           -- one or more named views, switch between them by name
@@ -320,27 +321,42 @@ feature-flag-xyz         " matches only if it's in the visible row
 ```
 
 Pressing `<CR>` on a record opens an action menu: open in buffer, open in browser, copy
-URL, and an "Edit `<field>`" action for every `buffer.editable` entry (same choices/text
-flow as the record buffer below). Every action keeps the picker open except opening in a
-buffer.
+URL, and an "Edit `<field>`" action for every `buffer.editable` entry. Select fields open
+their choices on top of the picker; text fields open the record buffer with the cursor at
+the end of that field, in insert mode. Every action keeps the picker open except opening
+in a buffer and editing a text field.
 
-Inside a record buffer, press `<CR>` for quick actions: open in browser, browse comments,
-copy the record's URL, refresh the buffer, or edit a field (if `buffer.editable` is
-configured). With the cursor on a URL, `o` opens it and `c` copies it. With the cursor on
-a section, `e` edits that field directly, same as the `<CR>` menu's "Edit" action. If the
-section isn't listed in `buffer.editable`, it toasts instead of editing.
+Inside a record buffer:
+
+| Key    | Action                                                                        |
+| ------ | ----------------------------------------------------------------------------- |
+| `<CR>` | Actions: open in browser, browse comments, copy URL, refresh, edit a field    |
+| `go`   | Open the URL under the cursor                                                 |
+| `e`    | On a `select` field's section: pick a new value. Elsewhere: the usual motion. |
+| `:w`   | Save pending text edits now                                                   |
 
 ### Editing fields
 
 > **This writes to Airtable.** Only fields you explicitly list in `buffer.editable` can
 > ever be edited.
 
+- **`type = 'text'`** — edit the field directly in the record buffer, with any Vim
+  motion or operator. Changes are saved automatically `buffer.autosave.debounce_ms`
+  (default 1000) after you stop typing, all changed fields in one request. They're also
+  saved right away on `:w`, when you leave the buffer, and when Neovim exits.
+  - Everything that isn't an editable field is read-only. Typing there is refused, and
+    an edit that crosses into it (e.g. `dG`) is reverted, keeping your field changes.
+  - Single-line fields (single line text, URL, email, phone, number) can't get a line
+    break. Number fields are sent as numbers, and an empty number field clears it.
+  - Supported for text and number fields. Other field types listed as `text` stay
+    read-only, with a warning.
+  - The end of the title line shows the save state: `● unsaved`, `… saving`,
+    `✓ saved`, or `✗ not saved` (it retries with your next edit, and `:w`). While
+    edits are unsaved the buffer is `'modified'`, so `:q` warns you.
+  - Set `buffer.autosave.enabled = false` to only save on `:w`.
 - **`type = 'select'`** — opens a picker listing the field's valid choices. Pressing
-  `<CR>` on a choice saves it immediately.
-- **`type = 'text'`** — opens a large centered floating buffer prefilled with the
-  field's current value. `<C-CR>` saves, `q` discards.
-
-After a successful edit, the record buffer refreshes in place.
+  `<CR>` on a choice saves it immediately, then the record buffer refreshes in place
+  (unsaved text edits are saved first and kept).
 
 ### Keymaps
 
@@ -354,4 +370,11 @@ vim.keymap.set('n', '<leader>ar', function() require('airtable').resume() end, {
 
 - Read-only by default. The only write operation is editing a field you've explicitly
   listed in `buffer.editable`.
-- No local caching — every command re-fetches from the API.
+- No local caching of records — every command re-fetches them from the API. The table
+  schema (field types, select choices, table id) is cached for the session.
+
+## Development
+
+```sh
+make test   # headless Neovim + plenary.nvim (set PLENARY_DIR to point at your copy)
+```

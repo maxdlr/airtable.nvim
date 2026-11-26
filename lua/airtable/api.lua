@@ -85,14 +85,17 @@ local function encode_path_segment(segment)
 	end))
 end
 
-local function build_table_path()
+local function table_path()
 	local opts = config.options
 	return string.format("%s/%s/%s", API_URL, opts.base_id, encode_path_segment(opts.table_name))
 end
 
-local function build_query(formula, sort, offset)
-	local opts = config.options
-	local query = { pageSize = tostring(opts.page_size) }
+local function record_path(record_id)
+	return table_path() .. "/" .. encode_path_segment(record_id)
+end
+
+local function list_query(formula, sort, offset)
+	local query = { pageSize = tostring(config.options.page_size) }
 	if formula then
 		query.filterByFormula = formula
 	end
@@ -115,160 +118,130 @@ local function next_offset(decoded)
 	return offset
 end
 
-function M.list_records(formula, sort, callback)
+local MISSING_TOKEN = { category = "Missing Token", message = "no Airtable personal access token configured" }
+
+---@return table? decoded
+---@return AirtableError? err
+local function handle_response(response)
+	if not response or response.status ~= 200 then
+		return nil,
+			{
+				category = string.format("API Error (%s)", response and response.status or "?"),
+				message = (response and response.body) or "no response body",
+			}
+	end
+	local ok, decoded = pcall(vim.json.decode, response.body)
+	if not ok or type(decoded) ~= "table" then
+		return nil, { category = "Response Error", message = "failed to decode Airtable response" }
+	end
+	return decoded, nil
+end
+
+-- Single entry point for every HTTP call. With a callback it's async (callback runs on
+-- the main loop); without one it blocks and returns (decoded, err) — only used where
+-- we must not lose data, e.g. saving pending edits on :w or when Neovim exits.
+---@param method 'get'|'patch'
+---@param url string
+---@param opts { query: table?, body: table? }
+---@param callback fun(decoded: table?, err: AirtableError?)?
+---@return table? decoded
+---@return AirtableError? err
+local function request(method, url, opts, callback)
+	local function finish(decoded, err)
+		if callback then
+			callback(decoded, err)
+			return
+		end
+		return decoded, err
+	end
+
 	local token = config.token()
 	if not token then
-		callback(nil, { category = "Missing Token", message = "no Airtable personal access token configured" })
-		return
+		return finish(nil, MISSING_TOKEN)
 	end
 
-	local curl = require("plenary.curl")
-	local records = {}
-	local path = build_table_path()
-
-	local function fetch_page(offset)
-		curl.get(path, {
-			query = build_query(formula, sort, offset),
-			headers = { Authorization = "Bearer " .. token },
-			-- "-g": disable curl's URL globbing, or "[" / "]" in sort[0][field] breaks the request.
-			raw = { "-g" },
-			callback = vim.schedule_wrap(function(response)
-				if response.status ~= 200 then
-					callback(nil, {
-						category = string.format("API Error (%d)", response.status),
-						message = response.body or "no response body",
-					})
-					return
-				end
-
-				local ok, decoded = pcall(vim.json.decode, response.body)
-				if not ok then
-					callback(nil, { category = "Response Error", message = "failed to decode Airtable response" })
-					return
-				end
-
-				vim.list_extend(records, decoded.records or {})
-
-				local offset = next_offset(decoded)
-				if offset then
-					fetch_page(offset)
-				else
-					callback(records, nil)
-				end
-			end),
-		})
+	local headers = { Authorization = "Bearer " .. token }
+	local body
+	if opts.body then
+		local ok, encoded = pcall(vim.json.encode, opts.body)
+		if not ok then
+			return finish(nil, { category = "Request Error", message = "failed to encode request body" })
+		end
+		body = encoded
+		headers["Content-Type"] = "application/json"
 	end
 
-	fetch_page(nil)
-end
-
-local function build_record_comments_path(record_id)
-	local opts = config.options
-	return string.format(
-		"%s/%s/%s/%s/%s",
-		API_URL,
-		opts.base_id,
-		encode_path_segment(opts.table_name),
-		encode_path_segment(record_id),
-		"comments"
-	)
-end
-
--- Airtable's comments endpoint 422s on a `sort` param, unlike the records endpoint.
-function M.list_record_comments(record_id, callback)
-	local token = config.token()
-	if not token then
-		callback(nil, { category = "Missing Token", message = "no Airtable personal access token configured" })
-		return
-	end
-
-	local curl = require("plenary.curl")
-	local comments = {}
-	local path = build_record_comments_path(record_id)
-
-	local function fetch_page(offset)
-		curl.get(path, {
-			query = build_query(nil, nil, offset),
-			headers = { Authorization = "Bearer " .. token },
-			raw = { "-g" },
-			callback = vim.schedule_wrap(function(response)
-				if response.status ~= 200 then
-					callback(nil, {
-						category = string.format("API Error (%d)", response.status),
-						message = response.body or "no response body",
-					})
-					return
-				end
-
-				local ok, decoded = pcall(vim.json.decode, response.body)
-				if not ok then
-					callback(nil, { category = "Response Error", message = "failed to decode Airtable response" })
-					return
-				end
-
-				-- Comments endpoint returns { comments: [...] }, not { records: [...] }.
-				vim.list_extend(comments, decoded.comments or {})
-
-				local offset = next_offset(decoded)
-				if offset then
-					fetch_page(offset)
-				else
-					callback(comments, nil)
-				end
-			end),
-		})
-	end
-
-	fetch_page(nil)
-end
-
-local function build_record_path(record_id)
-	local opts = config.options
-	return string.format(
-		"%s/%s/%s/%s",
-		API_URL,
-		opts.base_id,
-		encode_path_segment(opts.table_name),
-		encode_path_segment(record_id)
-	)
-end
-
-function M.get_recordById(record_id, callback)
-	local token = config.token()
-	if not token then
-		callback(nil, { category = "Missing Token", message = "no Airtable personal access token configured" })
-		return
-	end
-
-	local curl = require("plenary.curl")
-	local path = build_record_path(record_id)
-
-	curl.get(path, {
-		headers = { Authorization = "Bearer " .. token },
+	local args = {
+		query = opts.query,
+		headers = headers,
+		body = body,
+		-- "-g": disable curl's URL globbing, or "[" / "]" in sort[0][field] breaks the request.
 		raw = { "-g" },
-		callback = vim.schedule_wrap(function(response)
-			if response.status ~= 200 then
-				callback(nil, {
-					category = string.format("API Error (%d)", response.status),
-					message = response.body or "no response body",
-				})
-				return
-			end
+	}
 
-			-- Returns the record object directly, not { records: [...] }.
-			local ok, decoded = pcall(vim.json.decode, response.body)
-			if not ok then
-				callback(nil, { category = "Response Error", message = "failed to decode Airtable response" })
-				return
-			end
+	local curl = require("plenary.curl")
+	if callback then
+		args.callback = vim.schedule_wrap(function(response)
+			callback(handle_response(response))
+		end)
+		args.on_error = vim.schedule_wrap(function(e)
+			callback(nil, { category = "Network Error", message = e.message or "request failed" })
+		end)
+		curl[method](url, args)
+		return
+	end
 
-			callback(decoded, nil)
-		end),
-	})
+	args.on_error = function(e)
+		error(e.message or "request failed", 0)
+	end
+	local ok, response = pcall(curl[method], url, args)
+	if not ok then
+		return nil, { category = "Network Error", message = tostring(response) }
+	end
+	return handle_response(response)
 end
 
--- base_id -> table id / full schema, cached for the session.
-local table_id_cache = {}
+-- Follows Airtable's `offset` pagination, collecting `decoded[list_key]` from each page.
+local function fetch_all(url, list_key, make_query, callback)
+	local items = {}
+	local function fetch_page(offset)
+		request("get", url, { query = make_query(offset) }, function(decoded, err)
+			if err then
+				callback(nil, err)
+				return
+			end
+			vim.list_extend(items, decoded[list_key] or {})
+			local next = next_offset(decoded)
+			if next then
+				fetch_page(next)
+			else
+				callback(items, nil)
+			end
+		end)
+	end
+	fetch_page(nil)
+end
+
+function M.list_records(formula, sort, callback)
+	fetch_all(table_path(), "records", function(offset)
+		return list_query(formula, sort, offset)
+	end, callback)
+end
+
+-- Airtable's comments endpoint 422s on a `sort` param, unlike the records endpoint,
+-- and returns { comments: [...] } instead of { records: [...] }.
+function M.list_record_comments(record_id, callback)
+	fetch_all(record_path(record_id) .. "/comments", "comments", function(offset)
+		return list_query(nil, nil, offset)
+	end, callback)
+end
+
+-- Returns the record object directly, not { records: [...] }.
+function M.get_recordById(record_id, callback)
+	request("get", record_path(record_id), {}, callback)
+end
+
+-- base_id -> table schema, cached for the session.
 local table_schema_cache = {}
 
 local function get_table_schema(callback)
@@ -279,63 +252,49 @@ local function get_table_schema(callback)
 		return
 	end
 
-	local token = config.token()
-	if not token then
-		callback(nil, { category = "Missing Token", message = "no Airtable personal access token configured" })
-		return
-	end
-
-	local curl = require("plenary.curl")
-	curl.get(string.format("%s/meta/bases/%s/tables", API_URL, opts.base_id), {
-		headers = { Authorization = "Bearer " .. token },
-		raw = { "-g" },
-		callback = vim.schedule_wrap(function(response)
-			if response.status ~= 200 then
-				callback(nil, {
-					category = string.format("API Error (%d)", response.status),
-					message = response.body or "no response body",
-				})
+	request("get", string.format("%s/meta/bases/%s/tables", API_URL, opts.base_id), {}, function(decoded, err)
+		if err then
+			callback(nil, err)
+			return
+		end
+		for _, table_info in ipairs(decoded.tables or {}) do
+			if table_info.name == opts.table_name or table_info.id == opts.table_name then
+				table_schema_cache[opts.base_id] = table_info
+				callback(table_info, nil)
 				return
 			end
-
-			local ok, decoded = pcall(vim.json.decode, response.body)
-			if not ok then
-				callback(nil, { category = "Response Error", message = "failed to decode Airtable response" })
-				return
-			end
-
-			for _, table_info in ipairs(decoded.tables or {}) do
-				if table_info.name == opts.table_name or table_info.id == opts.table_name then
-					table_schema_cache[opts.base_id] = table_info
-					table_id_cache[opts.base_id] = table_info.id
-					callback(table_info, nil)
-					return
-				end
-			end
-
-			callback(nil, {
-				category = "Config Error",
-				message = string.format('table "%s" not found in base "%s"', opts.table_name, opts.base_id),
-			})
-		end),
-	})
+		end
+		callback(nil, {
+			category = "Config Error",
+			message = string.format('table "%s" not found in base "%s"', opts.table_name, opts.base_id),
+		})
+	end)
 end
 
 -- Record URLs use the table id (tblXXX), not its display name.
 function M.get_table_id(callback)
-	local opts = config.options
-	local cached = table_id_cache[opts.base_id]
-	if cached then
-		callback(cached, nil)
-		return
-	end
-
 	get_table_schema(function(table_info, err)
 		if err then
 			callback(nil, err)
 			return
 		end
 		callback(table_info.id, nil)
+	end)
+end
+
+-- Field name -> Airtable field type (e.g. "singleLineText", "multilineText").
+---@param callback fun(types: table<string, string>?, err: AirtableError?)
+function M.get_field_types(callback)
+	get_table_schema(function(table_info, err)
+		if err then
+			callback(nil, err)
+			return
+		end
+		local types = {}
+		for _, field in ipairs(table_info.fields or {}) do
+			types[field.name] = field.type
+		end
+		callback(types, nil)
 	end)
 end
 
@@ -357,7 +316,9 @@ function M.get_field_choices(field_name, callback)
 					return
 				end
 				callback(
-					vim.tbl_map(function(choice) return choice.name end, choices),
+					vim.tbl_map(function(choice)
+						return choice.name
+					end, choices),
 					nil
 				)
 				return
@@ -368,47 +329,15 @@ function M.get_field_choices(field_name, callback)
 	end)
 end
 
--- PATCH leaves every other field on the record untouched.
-function M.update_record(record_id, field_name, value, callback)
-	local token = config.token()
-	if not token then
-		callback(nil, { category = "Missing Token", message = "no Airtable personal access token configured" })
-		return
-	end
-
-	local curl = require("plenary.curl")
-	local path = build_record_path(record_id)
-	local ok, body = pcall(vim.json.encode, { fields = { [field_name] = value } })
-	if not ok then
-		callback(nil, { category = "Request Error", message = "failed to encode request body" })
-		return
-	end
-
-	curl.patch(path, {
-		headers = {
-			Authorization = "Bearer " .. token,
-			["Content-Type"] = "application/json",
-		},
-		body = body,
-		raw = { "-g" },
-		callback = vim.schedule_wrap(function(response)
-			if response.status ~= 200 then
-				callback(nil, {
-					category = string.format("API Error (%d)", response.status),
-					message = response.body or "no response body",
-				})
-				return
-			end
-
-			local decode_ok, decoded = pcall(vim.json.decode, response.body)
-			if not decode_ok then
-				callback(nil, { category = "Response Error", message = "failed to decode Airtable response" })
-				return
-			end
-
-			callback(decoded, nil)
-		end),
-	})
+-- PATCH leaves every field not in `fields` untouched. Without a callback, blocks and
+-- returns (record, err).
+---@param record_id string
+---@param fields table<string, any>
+---@param callback fun(record: AirtableRecord?, err: AirtableError?)?
+---@return AirtableRecord?
+---@return AirtableError?
+function M.update_record(record_id, fields, callback)
+	return request("patch", record_path(record_id), { body = { fields = fields } }, callback)
 end
 
 function M.record_url(record_id, callback)
@@ -420,6 +349,11 @@ function M.record_url(record_id, callback)
 		end
 		callback(string.format("https://airtable.com/%s/%s/%s", opts.base_id, table_id, record_id), nil)
 	end)
+end
+
+-- Test hook: drops the cached schema.
+function M._reset_cache()
+	table_schema_cache = {}
 end
 
 return M

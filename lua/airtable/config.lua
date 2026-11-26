@@ -35,8 +35,13 @@
 
 ---@class AirtableEditableField
 ---@field field string Must match a `buffer.fields` entry's `field`
----@field type 'select'|'text'
+---@field type 'select'|'text' `text`: edited directly in the record buffer and
+---  autosaved. `select`: picked from the field's choices in a picker.
 ---@field name string? Menu label (default: "Edit <field>")
+
+---@class AirtableAutosave
+---@field enabled boolean? Default: true. When false, edits are only saved on `:w`.
+---@field debounce_ms integer? Delay after the last keystroke before saving. Default: 1000
 
 ---@class AirtableBufferField
 ---@field key string Drives default styling (see `airtable.style.classify`).
@@ -55,6 +60,7 @@
 ---@field fields AirtableBufferField[] Rendered in this order (except `title`)
 ---@field editable AirtableEditableField[]? Write operation — only these fields are editable
 ---@field style AirtableBufferStyle?
+---@field autosave AirtableAutosave?
 
 ---@class AirtableDateFormats
 ---@field datetime string? Placeholders: {DD} {MM} {YYYY} {HH} {mm}
@@ -91,6 +97,7 @@ local defaults = {
 			{ key = "status", field = "Status" },
 			{ key = "description", field = "Description" },
 		},
+		autosave = { enabled = true, debounce_ms = 1000 },
 	},
 	pickers = {
 		{
@@ -274,7 +281,11 @@ function M.setup(opts)
 			if condition.by and condition.by ~= "email" then
 				notify(
 					"Config Error",
-					string.format('picker "%s" has a filter with invalid "by" value "%s" (expected "email")', picker.name, tostring(condition.by)),
+					string.format(
+						'picker "%s" has a filter with invalid "by" value "%s" (expected "email")',
+						picker.name,
+						tostring(condition.by)
+					),
 					vim.log.levels.ERROR
 				)
 			end
@@ -352,6 +363,21 @@ function M.setup(opts)
 		end
 	end
 
+	local autosave = M.options.buffer.autosave
+	if type(autosave) ~= "table" then
+		notify("Config Error", '"buffer.autosave" must be a table', vim.log.levels.ERROR)
+		M.options.buffer.autosave = vim.deepcopy(defaults.buffer.autosave)
+	else
+		if type(autosave.enabled) ~= "boolean" then
+			notify("Config Error", '"buffer.autosave.enabled" must be a boolean', vim.log.levels.ERROR)
+			autosave.enabled = defaults.buffer.autosave.enabled
+		end
+		if type(autosave.debounce_ms) ~= "number" or autosave.debounce_ms < 0 then
+			notify("Config Error", '"buffer.autosave.debounce_ms" must be a number >= 0', vim.log.levels.ERROR)
+			autosave.debounce_ms = defaults.buffer.autosave.debounce_ms
+		end
+	end
+
 	for _, editable in ipairs(M.options.buffer.editable or {}) do
 		if not editable.field or editable.field == "" then
 			notify("Config Error", 'a "buffer.editable" entry is missing "field"', vim.log.levels.ERROR)
@@ -368,6 +394,36 @@ function M.setup(opts)
 			)
 		end
 	end
+end
+
+---@param field string Airtable field name
+---@return AirtableEditableField?
+function M.editable_entry(field)
+	for _, entry in ipairs(M.options.buffer.editable or {}) do
+		if entry.field == field then
+			return entry
+		end
+	end
+	return nil
+end
+
+-- Fields edited directly in the record buffer (vs. through a picker).
+---@param field string
+---@return boolean
+function M.is_inline_editable(field)
+	local entry = M.editable_entry(field)
+	return entry ~= nil and entry.type == "text"
+end
+
+---@param key string
+---@return AirtableBufferField?
+function M.buffer_field_by_key(key)
+	for _, entry in ipairs(M.options.buffer.fields) do
+		if entry.key == key then
+			return entry
+		end
+	end
+	return nil
 end
 
 ---@param name string?

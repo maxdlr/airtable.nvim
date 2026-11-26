@@ -1,3 +1,4 @@
 .luarc.json
 .stylua.toml
 *.log
+.tests/

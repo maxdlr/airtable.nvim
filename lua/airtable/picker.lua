@@ -1,6 +1,7 @@
 local config = require("airtable.config")
 local view = require("airtable.view")
 local api = require("airtable.api")
+local render = require("airtable.render")
 local format_field = api.format_field
 
 local M = {}
@@ -151,6 +152,8 @@ local function buffer_keys_shown_in_result_line(result_line)
 	return exclude
 end
 
+local PREVIEW_NS = vim.api.nvim_create_namespace("airtable_preview")
+
 ---@param result_line AirtableResultSection[]
 ---@return fun(ctx: snacks.picker.preview.ctx)
 local function make_previewer(result_line)
@@ -158,11 +161,12 @@ local function make_previewer(result_line)
 
 	return function(ctx)
 		ctx.preview:reset()
-		local lines, extmarks = view.render_buffer(ctx.item.record, { exclude = exclude, skip_missing = true })
-		ctx.preview:set_lines(lines)
+		local layout = render.layout(ctx.item.record, { exclude = exclude, skip_missing = true })
+		ctx.preview:set_lines(layout.lines)
 		ctx.preview:set_title("Preview")
 		vim.bo[ctx.buf].filetype = "markdown"
-		view.apply_extmarks(ctx.buf, extmarks)
+		vim.api.nvim_buf_clear_namespace(ctx.buf, PREVIEW_NS, 0, -1)
+		render.apply_extmarks(ctx.buf, PREVIEW_NS, layout.extmarks)
 	end
 end
 
@@ -238,16 +242,14 @@ local function open_record_action_menu(snacks_picker, item)
 		table.insert(commands, {
 			label = entry.name or (" " .. entry.field),
 			action = function()
-				local edit = require("airtable.edit")
-				local on_updated = function(updated_record)
-					apply_updated_record(snacks_picker, item, updated_record)
-				end
-
 				if entry.type == "select" then
-					edit.edit_select(record.id, entry.field, on_updated, refocus)
-				elseif entry.type == "text" then
-					local current_value = format_field(record.fields[entry.field])
-					edit.edit_text(record.id, entry.field, current_value, on_updated, refocus)
+					require("airtable.edit").edit_select(record.id, entry.field, function(updated_record)
+						apply_updated_record(snacks_picker, item, updated_record)
+					end, refocus)
+				else
+					-- Text fields are edited in the record buffer itself.
+					snacks_picker:close()
+					view.open(record.id, { focus_field = entry.field })
 				end
 			end,
 		})
