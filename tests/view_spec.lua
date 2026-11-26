@@ -73,10 +73,28 @@ describe("record buffer", function()
 		local session = open()
 		local buf = session.buf
 		assert.are.equal("acwrite", vim.bo[buf].buftype)
-		assert.are.equal("markdown", vim.bo[buf].filetype)
+		assert.are.equal("airtable", vim.bo[buf].filetype)
+		assert.is_not_nil(vim.treesitter.highlighter.active[buf]) -- still markdown-highlighted
+		assert.are.equal("markdown", vim.treesitter.get_parser(buf):lang())
 		assert.are.equal("# Fix login", vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1])
 		assert.is_false(vim.bo[buf].modified)
 		assert.matches("airtable://Fix login$", vim.api.nvim_buf_get_name(buf))
+	end)
+
+	it("doesn't trigger markdown filetype tooling", function()
+		local attached = false
+		local group = vim.api.nvim_create_augroup("airtable_test_md", { clear = true })
+		vim.api.nvim_create_autocmd("FileType", {
+			group = group,
+			pattern = "markdown",
+			callback = function()
+				attached = true
+			end,
+		})
+		local session = open()
+		vim.api.nvim_del_augroup_by_id(group)
+		assert.is_false(attached)
+		assert.is_true(vim.b[session.buf].disable_autoformat)
 	end)
 
 	it("is only modifiable while the cursor is inside an editable field", function()

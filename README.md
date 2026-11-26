@@ -335,6 +335,10 @@ Inside a record buffer:
 | `e`    | On a `select` field's section: pick a new value. Elsewhere: the usual motion. |
 | `:w`   | Save pending text edits now                                                   |
 
+The record buffer has its own filetype, `airtable`, highlighted with the markdown
+treesitter parser. Your markdown linters, LSPs and formatters don't attach to it. Hook
+into `FileType airtable` if you want something there.
+
 ### Editing fields
 
 > **This writes to Airtable.** Only fields you explicitly list in `buffer.editable` can

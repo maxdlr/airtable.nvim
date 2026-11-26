@@ -508,6 +508,24 @@ vim.api.nvim_create_autocmd("VimLeavePre", {
 	end,
 })
 
+M.FILETYPE = "airtable"
+
+-- Own filetype, highlighted with the markdown treesitter parser: markdown highlighting
+-- without the user's markdown linters, LSPs, formatters and renderers attaching. They'd
+-- flag the layout (blank lines, heading style) and a formatter rewriting the buffer on
+-- `:w` would fight the read-only structure.
+---@param buf integer
+local function set_filetype(buf)
+	pcall(vim.treesitter.language.register, "markdown", M.FILETYPE)
+	vim.bo[buf].filetype = M.FILETYPE
+	-- Formatters configured for every filetype: opt out (conform / LazyVim conventions).
+	vim.b[buf].disable_autoformat = true
+	vim.b[buf].autoformat = false
+	if not pcall(vim.treesitter.start, buf, "markdown") then
+		vim.bo[buf].syntax = "markdown"
+	end
+end
+
 ---@param record AirtableRecord
 ---@param field_types table<string, string>?
 ---@return AirtableSession
@@ -517,7 +535,7 @@ local function create_session(record, field_types)
 	vim.bo[buf].buftype = "acwrite"
 	vim.bo[buf].bufhidden = "hide"
 	vim.bo[buf].swapfile = false
-	vim.bo[buf].filetype = "markdown"
+	set_filetype(buf)
 
 	---@type AirtableSession
 	local session = {
