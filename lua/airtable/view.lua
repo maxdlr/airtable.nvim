@@ -186,6 +186,33 @@ local function violates_structure(session)
 	return false
 end
 
+-- Some legitimate edits leave the region extmarks slightly off (see regions.normalize
+-- and regions.absorb). Tries each fix in turn and keeps the first one that makes the
+-- static text match again; nothing is changed if none does.
+---@param session AirtableSession
+---@param added integer Lines added since the last good state
+---@return boolean repaired
+local function repair(session, added)
+	local buf, regs = session.buf, session.regions
+	local snapshot = regions.snapshot(buf, regs)
+	local attempts = {
+		function()
+			regions.normalize(buf, regs)
+		end,
+		function()
+			regions.absorb(buf, regs, session.static, added)
+		end,
+	}
+	for _, attempt in ipairs(attempts) do
+		attempt()
+		if not violates_structure(session) then
+			return true
+		end
+		regions.restore_ranges(buf, regs, snapshot)
+	end
+	return false
+end
+
 ---@param session AirtableSession
 function on_change(session)
 	if session.rendering or session.closed then
@@ -199,15 +226,11 @@ function on_change(session)
 
 	local buf = session.buf
 	local line_count = vim.api.nvim_buf_line_count(buf)
-	regions.normalize(buf, session.regions)
-	if violates_structure(session) then
-		local absorbed = regions.absorb(buf, session.regions, session.static, line_count - session.line_count)
-		if not absorbed or violates_structure(session) then
-			vim.schedule(function()
-				restore(session)
-			end)
-			return
-		end
+	if violates_structure(session) and not repair(session, line_count - session.line_count) then
+		vim.schedule(function()
+			restore(session)
+		end)
+		return
 	end
 	session.line_count = line_count
 	regions.decorate(session.buf, session.regions)

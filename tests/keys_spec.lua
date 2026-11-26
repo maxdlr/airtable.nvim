@@ -13,8 +13,13 @@ local function keys(str)
 end
 
 describe("record buffer keystrokes", function()
-	local session, calls, restore_api, notified, restore_notify
+	local session, calls, restore_api, notified, restore_notify, server_fields
 
+	local function warnings()
+		return vim.tbl_filter(function(n)
+			return n.level >= vim.log.levels.WARN
+		end, notified)
+	end
 	local function lines()
 		return vim.api.nvim_buf_get_lines(session.buf, 0, -1, false)
 	end
@@ -34,7 +39,8 @@ describe("record buffer keystrokes", function()
 		helpers.setup()
 		notified, restore_notify = helpers.capture_notifications()
 		calls = {}
-		local server = helpers.record({ Title = "Fix login", Description = "Line 1\nLine 2", Estimate = 3 })
+		server_fields = { Title = "Fix login", Description = "Line 1\nLine 2", Estimate = 3 }
+		local server = helpers.record(server_fields)
 		restore_api = helpers.stub(api, {
 			get_field_types = function(cb)
 				cb(helpers.FIELD_TYPES, nil)
@@ -124,6 +130,35 @@ describe("record buffer keystrokes", function()
 		assert.are.equal("Fix login", text("Title"))
 		vim.cmd("write")
 		assert.are.same({ Title = "Fix login" }, calls[#calls])
+	end)
+
+	describe("with a value ending in a line break", function()
+		before_each(function()
+			vim.api.nvim_buf_delete(session.buf, { force = true })
+			server_fields.Description = "Line 1\n"
+			view.open("recTEST1")
+			helpers.wait_for(function()
+				return view.session(vim.api.nvim_get_current_buf()) ~= nil
+			end)
+			session = view.session(vim.api.nvim_get_current_buf())
+		end)
+
+		it("edits it without a read-only violation and keeps the trailing break", function()
+			cursor(7, 0)
+			keys("A more<Esc>")
+			vim.wait(30)
+			assert.are.same({}, warnings())
+			assert.are.equal("Line 1 more\n", text("Description"))
+		end)
+
+		it("still deletes its empty last line cleanly with dd", function()
+			cursor(8, 0)
+			keys("dd")
+			vim.wait(30)
+			assert.are.same({}, warnings())
+			assert.are.equal("Line 1", text("Description"))
+			assert.are.equal("## Pr_link", lines()[10])
+		end)
 	end)
 
 	it("opens the URL under the cursor with go", function()

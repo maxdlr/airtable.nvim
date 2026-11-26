@@ -68,6 +68,12 @@ describe("autosave", function()
 		restore_notify()
 	end)
 
+	local function errors()
+		return vim.tbl_filter(function(n)
+			return n.level == vim.log.levels.ERROR
+		end, notified)
+	end
+
 	local function respond(call, err)
 		if err then
 			call.callback(nil, err)
@@ -102,6 +108,11 @@ describe("autosave", function()
 		assert.are.equal("saved", session.status)
 		assert.is_false(autosave.is_dirty(session))
 		assert.is_false(vim.bo[session.buf].modified)
+		assert.are.same({
+			message = "Description, Title saved",
+			level = vim.log.levels.INFO,
+			title = "Airtable · Saved",
+		}, notified[#notified])
 	end)
 
 	it("never overlaps saves: edits during a save are sent right after it", function()
@@ -135,12 +146,12 @@ describe("autosave", function()
 		respond(calls[1], { category = "API Error (422)", message = "bad" })
 		assert.are.equal("error", session.status)
 		assert.is_true(autosave.is_dirty(session))
-		assert.are.equal(1, #notified)
+		assert.are.equal(1, #errors())
 
 		type_into(session, "Title", "One!")
 		autosave.flush(session)
 		respond(calls[2], { category = "API Error (422)", message = "bad" })
-		assert.are.equal(1, #notified) -- still failing: no new toast
+		assert.are.equal(1, #errors()) -- still failing: no new toast
 
 		autosave.flush(session)
 		respond(calls[3])
@@ -163,7 +174,7 @@ describe("autosave", function()
 		autosave.flush(session)
 		assert.are.equal(2, #calls)
 		assert.are.equal("error", session.status)
-		assert.matches("not a number", notified[1].message)
+		assert.matches("not a number", errors()[1].message)
 	end)
 
 	it("sends a single-line field's line breaks as spaces", function()

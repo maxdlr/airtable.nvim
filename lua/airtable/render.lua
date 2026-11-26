@@ -156,12 +156,12 @@ function M.layout(record, opts)
 	-- Title (H1) --------------------------------------------------------------------
 	local title_entry
 	for _, entry in ipairs(fields) do
-		if entry.key == "title" then
+		if config.is_title_key(entry.key) then
 			title_entry = entry
 			break
 		end
 	end
-	table.insert(sections, { key = "title", row = 0 })
+	table.insert(sections, { key = title_entry and title_entry.key or "title", row = 0 })
 
 	if title_entry and is_inline(title_entry.field) then
 		local baseline = (format_field(record.fields[title_entry.field]):gsub("\n", " "))
@@ -197,7 +197,7 @@ function M.layout(record, opts)
 	for _, entry in ipairs(fields) do
 		local key = entry.key
 		local field = entry.field
-		if key == "title" or exclude[key] then
+		if config.is_title_key(key) or exclude[key] then
 			goto continue
 		end
 
@@ -241,6 +241,8 @@ function M.layout(record, opts)
 					single_line = single_line,
 					placeholder = M.EMPTY,
 					hl = "Title",
+					-- Drawn per row by regions.decorate, since the value can gain lines.
+					border = { border, border_hl },
 				})
 				table.insert(lines, "")
 			else
@@ -288,6 +290,11 @@ function M.layout(record, opts)
 			table.insert(lines, "")
 			table.insert(lines, line)
 			table.insert(extmarks, { line = #lines - 1, col = 0, opts = { hl_group = "Title", end_col = #line } })
+			-- Read-only heading lines have no bar; editable ones (select fields) do, like
+			-- every other editable section.
+			if config.editable_entry(field) then
+				table.insert(extmarks, border_mark(#lines - 1, border, border_hl))
+			end
 			table.insert(lines, "")
 		else
 			table.insert(lines, "## " .. heading)

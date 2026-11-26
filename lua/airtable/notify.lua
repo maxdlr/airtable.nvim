@@ -5,8 +5,9 @@ local M = {}
 ---@param category string Short category shown in the title, e.g. "Config Error"
 ---@param message string
 ---@param level integer vim.log.levels.*
-function M.notify(category, message, level)
-  vim.notify(message, level, { title = 'Airtable · ' .. category })
+---@param opts table? Extra vim.notify options, e.g. `id` to replace a previous toast
+function M.notify(category, message, level, opts)
+  vim.notify(message, level, vim.tbl_extend('force', opts or {}, { title = 'Airtable · ' .. category }))
 end
 
 return M

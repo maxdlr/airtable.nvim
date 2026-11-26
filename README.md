@@ -138,7 +138,7 @@ require('airtable').setup({
 
   buffer = {
     fields = {                                        -- rendered in this exact order when a record is opened
-      { key = 'title', field = 'Title' },             -- key="title" is special: the H1 heading
+      { key = 'title', field = 'Title' },             -- key="title" (any case) is special: the H1 heading
       { key = 'status', field = 'Status' },           -- other keys become their own "## <Key>" section
       { key = 'description', field = 'Description' },
     },
@@ -355,7 +355,8 @@ into `FileType airtable` if you want something there.
   - Supported for text and number fields. Other field types listed as `text` stay
     read-only, with a warning.
   - The end of the title line shows the save state: `● unsaved`, `… saving`,
-    `✓ saved`, or `✗ not saved` (it retries with your next edit, and `:w`). While
+    `✓ saved`, or `✗ not saved` (it retries with your next edit, and `:w`). Each
+    successful save also toasts which fields were saved. While
     edits are unsaved the buffer is `'modified'`, so `:q` warns you.
   - Set `buffer.autosave.enabled = false` to only save on `:w`.
 - **`type = 'select'`** — opens a picker listing the field's valid choices. Pressing

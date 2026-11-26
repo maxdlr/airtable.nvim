@@ -49,9 +49,26 @@ local function set_range(buf, region, sr, sc, er, ec)
 	})
 end
 
--- A block region always ends at the end of a line. Deleting its last line (`dd`)
--- drags the end mark onto col 0 of the following line, swallowing a line break that
--- belongs to the static text after it. Pull the end back to where it belongs.
+---@return integer[][] ranges Current range of each region, for `restore_ranges`
+function M.snapshot(buf, regions)
+	local ranges = {}
+	for i, region in ipairs(regions) do
+		ranges[i] = { M.range(buf, region) }
+	end
+	return ranges
+end
+
+function M.restore_ranges(buf, regions, ranges)
+	for i, region in ipairs(regions) do
+		set_range(buf, region, unpack(ranges[i]))
+	end
+end
+
+-- Deleting a block's last line (`dd`) drags its end mark onto col 0 of the following
+-- line, swallowing a line break that belongs to the static text after it. Pulls the
+-- end back to the end of the previous line.
+-- Only a repair attempt: a value ending in "\n" legitimately ends at col 0 of its
+-- last (empty) line, so callers must check the static text still matches after this.
 function M.normalize(buf, regions)
 	for _, region in ipairs(regions) do
 		if region.kind == "block" then

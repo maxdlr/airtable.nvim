@@ -134,7 +134,9 @@ describe("record buffer", function()
 			return vim.api.nvim_buf_get_lines(session.buf, 5, 6, false)[1] == "## Description"
 		end))
 		assert.are.equal("# Fix login!", vim.api.nvim_buf_get_lines(session.buf, 0, 1, false)[1])
-		assert.matches("change reverted", notified[#notified].message)
+		assert.is_true(vim.iter(notified):any(function(n)
+			return n.message:find("change reverted", 1, true) ~= nil
+		end))
 		assert.is_true(helpers.wait_for(function()
 			return #calls == 1
 		end))

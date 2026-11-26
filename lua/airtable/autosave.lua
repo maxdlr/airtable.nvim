@@ -167,6 +167,14 @@ local function apply_saved(session, texts, errors, record)
 	if session.on_saved and record then
 		session.on_saved(record)
 	end
+
+	-- The status at the top of the buffer is out of view when scrolled down. One id per
+	-- buffer so notifiers that support it (snacks) update one toast instead of stacking.
+	local saved_fields = vim.tbl_keys(texts)
+	table.sort(saved_fields)
+	notify("Saved", table.concat(saved_fields, ", ") .. " saved", vim.log.levels.INFO, {
+		id = "airtable_saved_" .. session.buf,
+	})
 end
 
 ---@param session AirtableSession

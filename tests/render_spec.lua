@@ -160,6 +160,24 @@ describe("render.layout", function()
 		end)
 	end)
 
+	it("uses a title key in any case as the H1, not as a section", function()
+		helpers.setup({
+			buffer = {
+				fields = { { key = "Title", field = "Titre" }, { key = "Created By", field = "Created By" } },
+				editable = { { field = "Titre", type = "text" } },
+			},
+		})
+		local rec = helpers.record({ Titre = "Simulateur Retraite", ["Created By"] = "Maxime" })
+		local l = render.layout(rec, { editable = true, field_types = { Titre = "singleLineText" } })
+		assert.are.equal("# Simulateur Retraite", l.lines[1])
+		assert.are.equal("Titre", l.regions[1].field)
+		assert.are.equal(1, #l.regions)
+		assert.is_nil(vim.iter(l.lines):find(function(line)
+			return line:find("Simulateur", 1, true) ~= nil and line:sub(1, 2) ~= "# "
+		end))
+		assert.are.equal("# Simulateur Retraite", render.layout(rec).lines[1])
+	end)
+
 	it("makes heading-style fields inline regions after 'Key: '", function()
 		helpers.setup({
 			buffer = {
@@ -177,5 +195,38 @@ describe("render.layout", function()
 			{ "inline", 3, 13, 3, 18 },
 			{ name.kind, name.start_row, name.start_col, name.end_row, name.end_col }
 		)
+	end)
+
+	it("gives every editable section the editable bar, heading-style ones included", function()
+		helpers.setup({
+			buffer = {
+				fields = {
+					{ key = "title", field = "Title" },
+					{ key = "ticket_name", field = "Name" },
+					{ key = "ticket_id", field = "Ref" },
+					{ key = "app_name", field = "App" },
+				},
+				editable = { { field = "Name", type = "text" }, { field = "Ref", type = "select" } },
+			},
+		})
+		local rec = helpers.record({ Title = "T", Name = "Alpha", Ref = "R-1", App = "Web" })
+		local l = render.layout(rec, { editable = true, field_types = { Name = "singleLineText" } })
+		local editable_hl = render.border_hl("Name")
+		assert.are_not.equal("Comment", editable_hl)
+
+		-- text field: the region carries the bar (drawn per row by regions.decorate)
+		assert.are.same({ render.left_border(), editable_hl }, l.regions[1].border)
+
+		local function bar_on(row)
+			for _, mark in ipairs(l.extmarks) do
+				if mark.line == row and mark.opts.virt_text_pos == "inline" then
+					return mark.opts.virt_text[1][2]
+				end
+			end
+		end
+		assert.are.equal("Ticket_id: R-1", l.lines[7])
+		assert.are.equal(editable_hl, bar_on(6)) -- select field
+		assert.are.equal("App_name: Web", l.lines[10])
+		assert.is_nil(bar_on(9)) -- read-only: unchanged, no bar
 	end)
 end)

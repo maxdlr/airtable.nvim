@@ -45,7 +45,7 @@
 
 ---@class AirtableBufferField
 ---@field key string Drives default styling (see `airtable.style.classify`).
----  `"title"` is special: rendered as the H1 heading.
+---  `"title"` (any case) is special: rendered as the H1 heading.
 ---@field field string
 ---@field date_format 'datetime'|'date'|'time'|'short_date'|nil
 
@@ -413,6 +413,14 @@ end
 function M.is_inline_editable(field)
 	local entry = M.editable_entry(field)
 	return entry ~= nil and entry.type == "text"
+end
+
+-- The H1 field. Case-insensitive, like section styling (`airtable.style.classify`),
+-- so human-readable keys such as "Title" work.
+---@param key any
+---@return boolean
+function M.is_title_key(key)
+	return type(key) == "string" and key:lower() == "title"
 end
 
 ---@param key string
